@@ -1,0 +1,13 @@
+# NOTA: Recuerda sustituir el valor de "usuario_id" por un UUID real 
+# obtenido manualmente de tu tabla 'usuarios' en Supabase para evitar
+# errores de llave foránea (Foreign Key) antes de enviar la petición.
+
+POST http://127.0.0.1:8080/sugerencias HTTP/1.1
+Content-Type: application/json
+
+{
+  "titulo": "Mejorar la red Wi-Fi",
+  "descripcion": "El internet en los laboratorios de cómputo se desconecta constantemente durante las clases.",
+  "categoria": "Infraestructura",
+  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22"
+}
