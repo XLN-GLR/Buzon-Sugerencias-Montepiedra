@@ -11,3 +11,20 @@ Content-Type: application/json
   "categoria": "Infraestructura",
   "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22"
 }
+
+###
+
+### 1. Obtener todas las sugerencias (ordenadas por fecha más reciente)
+GET http://127.0.0.1:8080/sugerencias HTTP/1.1
+
+###
+
+### 2. Eliminar una sugerencia - Intento sin rol de administrador (Debe retornar 403)
+DELETE http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9 HTTP/1.1
+x-user-role: alumno
+
+###
+
+### 3. Eliminar una sugerencia - Intento con rol de administrador (Debe retornar 200 o 404 si el ID no existe)
+DELETE http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9 HTTP/1.1
+x-user-role: administrador
