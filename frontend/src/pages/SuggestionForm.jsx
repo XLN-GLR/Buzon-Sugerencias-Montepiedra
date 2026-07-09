@@ -1,42 +1,83 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { api, encodeDescription } from '../utils/api';
 import './Pages.css';
 
+// Strict array of forbidden words (Spanish insults and inappropriate terms)
+const FORBIDDEN_WORDS = [
+  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón', 
+  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil', 
+  'groseria', 'grosería', 'basura', 'hijo de puta', 'malparido', 'culiado'
+];
+
 export default function SuggestionForm() {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Academico');
   const [description, setDescription] = useState('');
   const [author, setAuthor] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [saveSource, setSaveSource] = useState('backend');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  // Checks if text contains any forbidden words (case-insensitive)
+  const hasProfanity = (text) => {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    return FORBIDDEN_WORDS.some(word => lower.includes(word));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title || !description) return;
 
-    // Simulate suggestion submission
-    const newSuggestion = {
-      title,
-      category,
-      description,
-      author: isAnonymous ? 'Anónimo' : author || 'Anónimo',
-      date: new Date().toISOString().split('T')[0],
-      status: 'Pendiente'
-    };
+    setLoading(true);
+    setErrorMessage('');
+    setSubmitted(false);
 
-    console.log('Nueva Sugerencia Enviada:', newSuggestion);
+    // Moderation check: Profanity filter validation
+    if (hasProfanity(title) || hasProfanity(description)) {
+      setErrorMessage('⚠️ ¡ATENCIÓN! Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.');
+      setLoading(false);
+      return;
+    }
 
-    // Show success banner and reset form
-    setSubmitted(true);
-    setTitle('');
-    setCategory('Academico');
-    setDescription('');
-    setAuthor('');
-    setIsAnonymous(true);
+    // Determine target author name (use form field or fall back to logged-in user name)
+    const authorName = isAnonymous ? user.nombre : (author.trim() || user.nombre);
+    
+    // Encode description with author metadata and anonymity flag
+    const encodedDesc = encodeDescription(description, authorName, isAnonymous);
 
-    // Hide success banner after 5 seconds
-    setTimeout(() => {
-      setSubmitted(false);
-    }, 5000);
+    try {
+      const result = await api.createSuggestion(
+        title,
+        encodedDesc,
+        category,
+        user.usuario_id
+      );
+
+      // Set source to display correct success message
+      setSaveSource(result.isSimulated ? 'local' : 'backend');
+      setSubmitted(true);
+
+      // Reset Form fields
+      setTitle('');
+      setCategory('Academico');
+      setDescription('');
+      setAuthor('');
+      setIsAnonymous(true);
+
+      // Auto-hide success alert
+      setTimeout(() => {
+        setSubmitted(false);
+      }, 6000);
+    } catch (err) {
+      setErrorMessage(err.message || 'Error al enviar la sugerencia.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,7 +93,18 @@ export default function SuggestionForm() {
         {submitted && (
           <div className="alert-banner alert-success">
             <span>✅</span>
-            <span>¡Tu sugerencia ha sido enviada con éxito! Será revisada por la administración institucional.</span>
+            <span>
+              {saveSource === 'backend' 
+                ? '¡Tu sugerencia ha sido enviada con éxito al backend y guardada en Supabase!' 
+                : '¡Sugerencia guardada con éxito (Simulador local activo)! Será visible en el tablero.'}
+            </span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="alert-banner alert-error" style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <span style={{ fontSize: '1.25rem' }}>🛑</span>
+            <span>{errorMessage}</span>
           </div>
         )}
 
@@ -62,10 +114,11 @@ export default function SuggestionForm() {
             <input
               type="text"
               id="title"
-              placeholder="Ej. Mejorar el equipamiento del taller de carpintería"
+              placeholder="Ej. Mejorar el equipamiento del laboratorio de física"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
+              disabled={loading}
             />
             <p className="form-help">Escribe un título corto y claro que describa tu propuesta.</p>
           </div>
@@ -76,6 +129,7 @@ export default function SuggestionForm() {
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              disabled={loading}
             >
               <option value="Academico">Académico</option>
               <option value="Infraestructura">Infraestructura</option>
@@ -93,6 +147,7 @@ export default function SuggestionForm() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               required
+              disabled={loading}
             ></textarea>
           </div>
 
@@ -105,8 +160,9 @@ export default function SuggestionForm() {
                   name="identity"
                   checked={isAnonymous}
                   onChange={() => setIsAnonymous(true)}
+                  disabled={loading}
                 />
-                Enviar como Anónimo
+                Enviar como Anónimo (la administración conocerá tu autoría, pero el público no)
               </label>
               <label className="radio-option">
                 <input
@@ -114,6 +170,8 @@ export default function SuggestionForm() {
                   name="identity"
                   checked={!isAnonymous}
                   onChange={() => setIsAnonymous(false)}
+                  disabled={loading}
+                  style={{ width: 'auto' }}
                 />
                 Incluir mi nombre
               </label>
@@ -126,17 +184,23 @@ export default function SuggestionForm() {
               <input
                 type="text"
                 id="author"
-                placeholder="Ej. Carlos Mendoza (2do de Bachillerato)"
+                placeholder={`Ej. ${user.nombre}`}
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
                 required={!isAnonymous}
+                disabled={loading}
               />
             </div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem' }}>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-              Enviar Sugerencia
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              style={{ width: '100%' }}
+              disabled={loading}
+            >
+              {loading ? 'Validando...' : 'Enviar Sugerencia'}
             </button>
           </div>
         </form>
