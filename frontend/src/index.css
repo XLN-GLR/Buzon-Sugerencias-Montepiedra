@@ -42,6 +42,21 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root[data-theme="dark"] {
+  --color-bg: #121212;
+  --color-card-bg: #1E1E1E;
+  --color-text: #F3F4F6;
+  --color-text-muted: #9CA3AF;
+  --color-border: #374151;
+  
+  --color-primary-light: #00361E;
+  --color-secondary-light: #262626;
+  
+  --color-success-bg: #064E3B;
+  --color-warning-bg: #78350F;
+  --color-danger-bg: #7F1D1D;
+}
+
 /* Global Reset */
 *, *::before, *::after {
   box-sizing: border-box;
