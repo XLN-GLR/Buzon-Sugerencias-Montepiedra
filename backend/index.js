@@ -1,8 +1,12 @@
 import express from 'express';
+import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { Config } from './config.js';
 
 const app = express();
+
+// Habilitar CORS para permitir peticiones desde el frontend
+app.use(cors());
 
 // Middleware para poder recibir JSON desde el frontend de tu amigo
 app.use(express.json());
