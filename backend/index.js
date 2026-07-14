@@ -184,6 +184,60 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
   }
 });
 
+// Ruta para moderar una sugerencia (cambiar estado y agregar respuesta)
+app.patch('/sugerencias/:id/moderacion', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role']; // Rol del usuario actual
+  const { estado, respuesta_moderador } = req.body;
+
+  // 1. Lógica de control de acceso (Seguridad de roles)
+  if (userRole !== 'profesor' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. No tienes permisos de moderación."
+    });
+  }
+
+  try {
+    // 2. Consultar existencia del registro en Supabase
+    const { data: sugerencia, error: fetchError } = await supabase
+      .from('sugerencias')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !sugerencia) {
+      return res.status(404).json({
+        error: "La sugerencia especificada no existe."
+      });
+    }
+
+    // 3. Actualizar estado y respuesta_moderador
+    const { data: updatedData, error: updateError } = await supabase
+      .from('sugerencias')
+      .update({ estado, respuesta_moderador })
+      .eq('id', id)
+      .select('id, estado, respuesta_moderador')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Sugerencia moderada exitosamente",
+      id: updatedData.id,
+      estado: updatedData.estado,
+      respuesta_moderador: updatedData.respuesta_moderador
+    });
+  } catch (error) {
+    console.error("Error al moderar sugerencia en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al moderar la sugerencia",
+      details: error.message
+    });
+  }
+});
+
 // Ruta para eliminar una sugerencia por su ID (reservado para el rol de administrador)
 app.delete('/sugerencias/:id', async (req, res) => {
   const { id } = req.params;

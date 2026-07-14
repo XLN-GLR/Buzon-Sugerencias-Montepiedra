@@ -194,3 +194,66 @@ Se devuelve cuando ocurre una falla inesperada en el servidor o de comunicación
   "details": "Mensaje técnico detallado del error"
 }
 ```
+
+---
+
+#### 4. Moderar una Sugerencia
+
+Permite cambiar el estado de una sugerencia (ej. aprobada, rechazada) y registrar la respuesta institucional o justificación del moderador. Solo los usuarios con rol de `profesor` o `admin` están autorizados para realizar esta acción.
+
+- **Método:** `PATCH`
+- **Ruta:** `/sugerencias/:id/moderacion`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Valores permitidos: `profesor`, `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "estado": "aprobada",
+  "respuesta_moderador": "Se ha coordinado con el departamento de infraestructura para atender este requerimiento."
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+Si la operación en la base de datos es exitosa, se retorna el JSON con los campos actualizados:
+
+```json
+{
+  "message": "Sugerencia moderada exitosamente",
+  "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+  "estado": "aprobada",
+  "respuesta_moderador": "Se ha coordinado con el departamento de infraestructura para atender este requerimiento."
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+Se devuelve cuando el rol especificado en `x-user-role` es `alumno` o no cuenta con los privilegios de moderación:
+
+```json
+{
+  "error": "Acceso denegado. No tienes permisos de moderación."
+}
+```
+
+###### Error 404 - Not Found (Sugerencia inexistente)
+Se devuelve cuando el UUID proporcionado en la URL no corresponde a ninguna sugerencia registrada en la base de datos de Supabase:
+
+```json
+{
+  "error": "La sugerencia especificada no existe."
+}
+```
+
+###### Error 500 - Internal Server Error
+Se devuelve ante fallas de comunicación con la base de datos o fallos internos del servidor:
+
+```json
+{
+  "error": "Error interno del servidor al moderar la sugerencia",
+  "details": "Mensaje técnico detallado del error"
+}
+```
