@@ -257,3 +257,111 @@ Se devuelve ante fallas de comunicación con la base de datos o fallos internos 
   "details": "Mensaje técnico detallado del error"
 }
 ```
+
+---
+
+### 👥 Módulo de Administración de Estudiantes (Exclusivo Admin)
+
+Este módulo expone endpoints orientados a la gestión y actualización de la información de los estudiantes, restringidos para uso exclusivo del rol `admin`.
+
+#### 1. Obtener Estudiantes
+
+Permite recuperar el listado de todos los usuarios registrados con rol de alumno/estudiante.
+
+- **Método:** `GET`
+- **Ruta:** `/usuarios/estudiantes`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Debe ser: `admin`)
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+Retorna un arreglo con la información básica de los estudiantes encontrados en la base de datos:
+
+```json
+[
+  {
+    "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@montepiedra.edu.ec",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos"
+  },
+  {
+    "id": "71796f2a-4e52-53d3-c0b7-e82840967c33",
+    "nombre": "Juan Pérez",
+    "correo": "juan.perez@montepiedra.edu.ec",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan"
+  }
+]
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+Se devuelve cuando el rol especificado no corresponde al administrador:
+
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de administrador."
+}
+```
+
+---
+
+#### 2. Actualizar Foto de Perfil
+
+Permite a los administradores actualizar la dirección URL de la foto de perfil para un estudiante determinado.
+
+- **Método:** `PUT`
+- **Ruta:** `/usuarios/:id/foto`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Debe ser: `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "foto_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb"
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+Si la actualización es exitosa, se retorna el objeto de confirmación con la nueva URL:
+
+```json
+{
+  "message": "Foto de perfil actualizada exitosamente",
+  "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+  "foto_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb"
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+Se devuelve cuando el rol del consultor no es `admin`:
+
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de administrador."
+}
+```
+
+###### Error 404 - Not Found (Usuario inexistente)
+Se devuelve cuando el UUID en la ruta no corresponde a ningún usuario registrado en Supabase:
+
+```json
+{
+  "error": "El usuario especificado no existe."
+}
+```
+
+###### Error 500 - Internal Server Error
+Se devuelve ante fallas de comunicación con la base de datos o fallos internos del servidor:
+
+```json
+{
+  "error": "Error interno del servidor al actualizar la foto de perfil",
+  "details": "Mensaje técnico detallado del error"
+}
+```

@@ -238,6 +238,90 @@ app.patch('/sugerencias/:id/moderacion', async (req, res) => {
   }
 });
 
+// Ruta para obtener todos los estudiantes (exclusivo para administradores)
+app.get('/usuarios/estudiantes', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de acceso exclusivo admin
+  if (userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de administrador."
+    });
+  }
+
+  try {
+    const { data: estudiantes, error } = await supabase
+      .from('usuarios')
+      .select('id, nombre, correo, foto_url')
+      .eq('rol', 'alumno');
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json(estudiantes);
+  } catch (error) {
+    console.error("Error al obtener estudiantes de Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al obtener los estudiantes",
+      details: error.message
+    });
+  }
+});
+
+// Ruta para actualizar la foto de perfil de un estudiante (exclusivo para administradores)
+app.put('/usuarios/:id/foto', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role'];
+  const { foto_url } = req.body;
+
+  // Validación de acceso exclusivo admin
+  if (userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de administrador."
+    });
+  }
+
+  try {
+    // 1. Consultar si el usuario existe
+    const { data: usuario, error: fetchError } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !usuario) {
+      return res.status(404).json({
+        error: "El usuario especificado no existe."
+      });
+    }
+
+    // 2. Actualizar foto_url
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('usuarios')
+      .update({ foto_url })
+      .eq('id', id)
+      .select('id, foto_url')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Foto de perfil actualizada exitosamente",
+      id: updatedUser.id,
+      foto_url: updatedUser.foto_url
+    });
+  } catch (error) {
+    console.error("Error al actualizar foto de perfil en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al actualizar la foto de perfil",
+      details: error.message
+    });
+  }
+});
+
 // Ruta para eliminar una sugerencia por su ID (reservado para el rol de administrador)
 app.delete('/sugerencias/:id', async (req, res) => {
   const { id } = req.params;
