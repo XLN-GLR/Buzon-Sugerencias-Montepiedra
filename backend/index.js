@@ -65,24 +65,57 @@ app.post('/sugerencias', async (req, res) => {
 
 // Ruta para obtener todas las sugerencias, ordenadas por created_at (más recientes primero)
 app.get('/sugerencias', async (req, res) => {
+  const userRole = req.headers['x-user-role']; // Rol del usuario actual
+
   try {
     const { data, error } = await supabase
       .from('sugerencias')
-      .select('*')
+      .select('*, usuarios (id, nombre, correo, foto_url)')
       .order('created_at', { ascending: false });
 
     if (error) {
       throw error;
     }
 
+    // Aplicar regla de privacidad para sugerencias anónimas
+    const processedData = data.map(sugerencia => {
+      const copy = { ...sugerencia };
+      
+      // Manejar la relación usuarios que Supabase puede devolver como objeto o array de un elemento
+      let usuarioInfo = copy.usuarios;
+      if (Array.isArray(usuarioInfo)) {
+        usuarioInfo = usuarioInfo[0] || null;
+      }
+
+      if (copy.es_anonimo) {
+        if (userRole === 'admin') {
+          // Admin ve datos reales
+          copy.usuarios = usuarioInfo;
+        } else {
+          // Profesor o alumno (o rol no especificado/inválido) ven datos anonimizados
+          copy.usuarios = {
+            id: null,
+            nombre: "Anónimo",
+            correo: "anonimo@montepiedra.edu.ec",
+            foto_url: null
+          };
+        }
+      } else {
+        // No es anónimo, se envían siempre los datos reales
+        copy.usuarios = usuarioInfo;
+      }
+
+      return copy;
+    });
+
     return res.status(200).json({
       message: "Sugerencias recuperadas exitosamente",
-      data: data
+      data: processedData
     });
   } catch (error) {
     console.error("Error al obtener sugerencias de Supabase:", error);
     return res.status(500).json({
-      error: "Error interno del servidor al obtener las sugerencias",
+      error: "Error interno del servidor al crear la sugerencia",
       details: error.message
     });
   }
