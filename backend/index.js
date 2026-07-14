@@ -19,6 +19,20 @@ app.get('/', (req, res) => {
   res.json({ status: "Backend corriendo con Node.js", database: "Conectada a Supabase" });
 });
 
+// Listado de palabras prohibidas para moderación de contenido (lenguaje inapropiado)
+const FORBIDDEN_WORDS = [
+  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón', 
+  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil', 
+  'groseria', 'grosería', 'basura', 'hijo de puta', 'malparido', 'culiado'
+];
+
+// Función para verificar si un texto contiene lenguaje inapropiado
+const hasProfanity = (text) => {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return FORBIDDEN_WORDS.some(word => lower.includes(word));
+};
+
 // Ruta para crear una nueva sugerencia
 app.post('/sugerencias', async (req, res) => {
   const { titulo, descripcion, categoria, usuario_id, es_anonimo, votos, respuesta_moderador, foto_url } = req.body;
@@ -27,6 +41,13 @@ app.post('/sugerencias', async (req, res) => {
   if (!titulo || !descripcion || !categoria || !usuario_id) {
     return res.status(400).json({
       error: "Faltan campos obligatorios. Debes proporcionar: titulo, descripcion, categoria y usuario_id."
+    });
+  }
+
+  // Validación de lenguaje inapropiado
+  if (hasProfanity(titulo) || hasProfanity(descripcion)) {
+    return res.status(400).json({
+      error: "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
     });
   }
 

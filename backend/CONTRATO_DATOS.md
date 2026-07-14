@@ -61,6 +61,15 @@ Se devuelve cuando alguno de los campos (`titulo`, `descripcion`, `categoria`, `
 }
 ```
 
+###### Error 400 - Bad Request (Contenido inapropiado detectado)
+Se devuelve cuando el servidor intercepta palabras prohibidas o inapropiadas (insultos, palabras vulgares u ofensivas en español) en los campos `titulo` o `descripcion` del cuerpo de la petición. El proceso de inserción a la base de datos se detiene inmediatamente:
+
+```json
+{
+  "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
+}
+```
+
 ###### Error 500 - Internal Server Error
 Se devuelve cuando ocurre un fallo interno en el servidor o un error de base de datos (por ejemplo, errores de claves foráneas o políticas de seguridad RLS):
 
