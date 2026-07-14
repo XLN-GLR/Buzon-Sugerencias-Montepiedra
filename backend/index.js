@@ -21,7 +21,7 @@ app.get('/', (req, res) => {
 
 // Ruta para crear una nueva sugerencia
 app.post('/sugerencias', async (req, res) => {
-  const { titulo, descripcion, categoria, usuario_id, es_anonimo, votos, respuesta_mode, foto_url } = req.body;
+  const { titulo, descripcion, categoria, usuario_id, es_anonimo, votos, respuesta_moderador, foto_url } = req.body;
 
   // Validación de campos requeridos
   if (!titulo || !descripcion || !categoria || !usuario_id) {
@@ -43,7 +43,7 @@ app.post('/sugerencias', async (req, res) => {
           estado: 'pendiente',
           es_anonimo: es_anonimo ?? false,
           votos: votos ?? 0,
-          respuesta_mode: respuesta_mode ?? null,
+          respuesta_moderador: respuesta_moderador ?? null,
           foto_url: foto_url ?? null
         }
       ])
@@ -81,35 +81,47 @@ app.get('/sugerencias', async (req, res) => {
       throw error;
     }
 
-    // Aplicar regla de privacidad para sugerencias anónimas
+    // Aplicar regla de privacidad para sugerencias anónimas y estructurar el retorno exacto
     const processedData = data.map(sugerencia => {
-      const copy = { ...sugerencia };
-      
       // Manejar la relación usuarios que Supabase puede devolver como objeto o array de un elemento
-      let usuarioInfo = copy.usuarios;
+      let usuarioInfo = sugerencia.usuarios;
       if (Array.isArray(usuarioInfo)) {
         usuarioInfo = usuarioInfo[0] || null;
       }
 
-      if (copy.es_anonimo) {
-        if (userRole === 'admin') {
-          // Admin ve datos reales
-          copy.usuarios = usuarioInfo;
-        } else {
-          // Profesor o alumno (o rol no especificado/inválido) ven datos anonimizados
-          copy.usuarios = {
+      // Preparar objeto de usuarios por defecto (datos reales)
+      let usuarioFinal = {
+        id: usuarioInfo ? usuarioInfo.id : null,
+        nombre: usuarioInfo ? usuarioInfo.nombre : "Anónimo",
+        correo: usuarioInfo ? usuarioInfo.correo : "anonimo@montepiedra.edu.ec",
+        foto_url: usuarioInfo ? usuarioInfo.foto_url : null
+      };
+
+      // Si es anónimo y el consultor NO es admin, se anonimiza
+      if (sugerencia.es_anonimo) {
+        if (userRole !== 'admin') {
+          usuarioFinal = {
             id: null,
             nombre: "Anónimo",
             correo: "anonimo@montepiedra.edu.ec",
             foto_url: null
           };
         }
-      } else {
-        // No es anónimo, se envían siempre los datos reales
-        copy.usuarios = usuarioInfo;
       }
 
-      return copy;
+      // Estructura exacta de salida requerida por el contrato (10 columnas + objeto usuarios)
+      return {
+        id: sugerencia.id,
+        created_at: sugerencia.created_at,
+        titulo: sugerencia.titulo,
+        descripcion: sugerencia.descripcion,
+        categoria: sugerencia.categoria,
+        es_anonimo: sugerencia.es_anonimo ?? false,
+        votos: sugerencia.votos ?? 0,
+        estado: sugerencia.estado || 'pendiente',
+        respuesta_moderador: sugerencia.respuesta_moderador || null,
+        usuarios: usuarioFinal
+      };
     });
 
     return res.status(200).json({
@@ -119,7 +131,7 @@ app.get('/sugerencias', async (req, res) => {
   } catch (error) {
     console.error("Error al obtener sugerencias de Supabase:", error);
     return res.status(500).json({
-      error: "Error interno del servidor al crear la sugerencia",
+      error: "Error interno del servidor al obtener las sugerencias",
       details: error.message
     });
   }

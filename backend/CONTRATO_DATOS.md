@@ -44,7 +44,7 @@ Si el registro es exitoso en la base de datos de Supabase:
     "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
     "es_anonimo": true,
     "votos": 0,
-    "respuesta_mode": null,
+    "respuesta_moderador": null,
     "foto_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c"
   }
 }
@@ -97,9 +97,10 @@ Si el rol especificado es `admin`, se envían los datos reales del creador de la
       "titulo": "Mejorar la red Wi-Fi",
       "descripcion": "El internet en los laboratorios de cómputo se desconecta constantemente durante las clases.",
       "categoria": "Infraestructura",
-      "estado": "pendiente",
       "es_anonimo": true,
-      "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "votos": 15,
+      "estado": "pendiente",
+      "respuesta_moderador": null,
       "usuarios": {
         "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
         "nombre": "Carlos Mendoza",
@@ -124,9 +125,10 @@ Si el rol es `alumno` o `profesor` y la sugerencia se marcó como anónima (`es_
       "titulo": "Mejorar la red Wi-Fi",
       "descripcion": "El internet en los laboratorios de cómputo se desconecta constantemente durante las clases.",
       "categoria": "Infraestructura",
-      "estado": "pendiente",
       "es_anonimo": true,
-      "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "votos": 15,
+      "estado": "pendiente",
+      "respuesta_moderador": null,
       "usuarios": {
         "id": null,
         "nombre": "Anónimo",
