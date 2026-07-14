@@ -21,7 +21,7 @@ app.get('/', (req, res) => {
 
 // Ruta para crear una nueva sugerencia
 app.post('/sugerencias', async (req, res) => {
-  const { titulo, descripcion, categoria, usuario_id } = req.body;
+  const { titulo, descripcion, categoria, usuario_id, es_anonimo, votos, respuesta_mode, foto_url } = req.body;
 
   // Validación de campos requeridos
   if (!titulo || !descripcion || !categoria || !usuario_id) {
@@ -40,7 +40,11 @@ app.post('/sugerencias', async (req, res) => {
           descripcion,
           categoria,
           usuario_id,
-          estado: 'pendiente' // valor por defecto explícito o implícito
+          estado: 'pendiente',
+          es_anonimo: es_anonimo ?? false,
+          votos: votos ?? 0,
+          respuesta_mode: respuesta_mode ?? null,
+          foto_url: foto_url ?? null
         }
       ])
       .select();

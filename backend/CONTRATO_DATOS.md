@@ -21,7 +21,9 @@ Permite registrar una nueva sugerencia enviada por un usuario de la institución
   "titulo": "Mejorar la red Wi-Fi",
   "descripcion": "El internet en los laboratorios de cómputo se desconecta constantemente durante las clases.",
   "categoria": "Infraestructura",
-  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22"
+  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+  "es_anonimo": true,
+  "foto_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c"
 }
 ```
 
@@ -39,7 +41,11 @@ Si el registro es exitoso en la base de datos de Supabase:
     "descripcion": "El internet en los laboratorios de cómputo se desconecta constantemente durante las clases.",
     "categoria": "Infraestructura",
     "estado": "pendiente",
-    "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22"
+    "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "es_anonimo": true,
+    "votos": 0,
+    "respuesta_mode": null,
+    "foto_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c"
   }
 }
 ```
