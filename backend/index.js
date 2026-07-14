@@ -137,6 +137,53 @@ app.get('/sugerencias', async (req, res) => {
   }
 });
 
+// Ruta para registrar un voto (incrementar votos de una sugerencia)
+app.post('/sugerencias/:id/votar', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Consultar los votos actuales de la sugerencia
+    const { data: sugerencia, error: fetchError } = await supabase
+      .from('sugerencias')
+      .select('votos')
+      .eq('id', id)
+      .maybeSingle();
+
+    // Si ocurre un error o la sugerencia no existe
+    if (fetchError || !sugerencia) {
+      return res.status(404).json({
+        error: "La sugerencia especificada no existe."
+      });
+    }
+
+    const nuevosVotos = (sugerencia.votos || 0) + 1;
+
+    // 2. Actualizar el valor de votos en la base de datos
+    const { data: updatedData, error: updateError } = await supabase
+      .from('sugerencias')
+      .update({ votos: nuevosVotos })
+      .eq('id', id)
+      .select('id, votos')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Voto registrado exitosamente",
+      id: updatedData.id,
+      votos: updatedData.votos
+    });
+  } catch (error) {
+    console.error("Error al registrar voto en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al registrar el voto",
+      details: error.message
+    });
+  }
+});
+
 // Ruta para eliminar una sugerencia por su ID (reservado para el rol de administrador)
 app.delete('/sugerencias/:id', async (req, res) => {
   const { id } = req.params;

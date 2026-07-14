@@ -151,3 +151,46 @@ Se devuelve cuando ocurre un error en el servidor al consultar los registros:
   "details": "Mensaje técnico detallado del error"
 }
 ```
+
+---
+
+#### 3. Registrar un Voto en una Sugerencia
+
+Permite realizar un incremento de `+1` en la columna de votos para una sugerencia en específico.
+
+- **Método:** `POST`
+- **Ruta:** `/sugerencias/:id/votar`
+- **Encabezados requeridos:** Ninguno en específico.
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+Si la operación en la base de datos es exitosa, devuelve el ID de la sugerencia y el número total de votos ya actualizado tras el incremento:
+
+```json
+{
+  "message": "Voto registrado exitosamente",
+  "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+  "votos": 16
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 404 - Not Found (Sugerencia inexistente)
+Se devuelve cuando el UUID proporcionado en la URL no corresponde a ninguna sugerencia registrada en Supabase:
+
+```json
+{
+  "error": "La sugerencia especificada no existe."
+}
+```
+
+###### Error 500 - Internal Server Error
+Se devuelve cuando ocurre una falla inesperada en el servidor o de comunicación con Supabase:
+
+```json
+{
+  "error": "Error interno del servidor al registrar el voto",
+  "details": "Mensaje técnico detallado del error"
+}
+```
