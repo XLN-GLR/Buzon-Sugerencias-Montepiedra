@@ -374,3 +374,194 @@ Se devuelve ante fallas de comunicación con la base de datos o fallos internos 
   "details": "Mensaje técnico detallado del error"
 }
 ```
+
+---
+
+### 🔐 Módulo de Autenticación y Primer Ingreso
+
+Este módulo gestiona la autenticación de usuarios por número de cédula y el flujo de configuración de contraseñas para el primer ingreso a la plataforma.
+
+#### 1. Iniciar Sesión (Login)
+
+Permite autenticar a un usuario mediante su número de cédula y contraseña, distinguiendo si es su primer ingreso a la plataforma para redirigirlo a la configuración de credenciales.
+
+- **Método:** `POST`
+- **Ruta:** `/auth/login`
+- **Encabezado requerido:** `Content-Type: application/json`
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+###### Para inicio de sesión regular:
+```json
+{
+  "cedula": "0912345678",
+  "password": "miPasswordSegura123"
+}
+```
+
+###### Para verificar estado de primer ingreso (la contraseña es opcional si es primer ingreso):
+```json
+{
+  "cedula": "0912345678"
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+###### Caso 1: Primer Ingreso (`es_primer_ingreso: true`)
+Si el usuario ingresa por primera vez, el backend responde con `requiere_configuracion: true` junto a los datos del usuario para que el frontend lo redirija a la pantalla de configuración de contraseña:
+
+```json
+{
+  "message": "Primer ingreso detectado. Se requiere configurar la contraseña.",
+  "requiere_configuracion": true,
+  "usuario": {
+    "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "cedula": "0912345678",
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@montepiedra.edu.ec",
+    "rol": "alumno",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos"
+  }
+}
+```
+
+###### Caso 2: Ingreso Regular Exitoso (`es_primer_ingreso: false`)
+Si el usuario ya configuró su contraseña previamente y el hash coincide mediante `bcrypt.compare`:
+
+```json
+{
+  "message": "Inicio de sesión exitoso",
+  "requiere_configuracion": false,
+  "usuario": {
+    "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "cedula": "0912345678",
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@montepiedra.edu.ec",
+    "rol": "alumno",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Faltan campos obligatorios)
+Se devuelve si no se proporciona el número de cédula o la contraseña en un inicio de sesión regular:
+
+```json
+{
+  "error": "El campo 'cedula' es obligatorio."
+}
+```
+o
+```json
+{
+  "error": "El campo 'password' es obligatorio para el inicio de sesión regular."
+}
+```
+
+###### Error 401 - Unauthorized (Contraseña incorrecta o credenciales inválidas)
+Se devuelve cuando las credenciales no son válidas:
+
+```json
+{
+  "error": "Credenciales inválidas. Contraseña incorrecta."
+}
+```
+
+###### Error 404 - Not Found (Usuario no encontrado)
+Se devuelve cuando no existe ningún usuario registrado con la cédula proporcionada:
+
+```json
+{
+  "error": "Usuario no encontrado. Verifique la cédula ingresada."
+}
+```
+
+###### Error 500 - Internal Server Error
+Se devuelve ante fallos en la consulta a la base de datos o errores internos del servidor:
+
+```json
+{
+  "error": "Error interno del servidor durante la autenticación",
+  "details": "Mensaje técnico del error"
+}
+```
+
+---
+
+#### 2. Configurar Contraseña de Primer Ingreso
+
+Permite al usuario registrar su contraseña definitiva durante su primer ingreso al sistema. Ofrece la opción de crear una nueva clave personalizada o conservar su número de cédula como contraseña.
+
+- **Método:** `POST`
+- **Ruta:** `/auth/primer-ingreso`
+- **Encabezado requerido:** `Content-Type: application/json`
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+###### Opción A: Crear una nueva contraseña personalizada
+```json
+{
+  "cedula": "0912345678",
+  "nueva_password": "miNuevaPasswordSegura2026",
+  "conservar_cedula": false
+}
+```
+
+###### Opción B: Conservar la cédula como contraseña
+```json
+{
+  "cedula": "0912345678",
+  "conservar_cedula": true
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+Si la contraseña se encripta con `bcrypt` (10 salt rounds) y se actualiza correctamente en Supabase (estableciendo `es_primer_ingreso: false`):
+
+```json
+{
+  "message": "Contraseña configurada exitosamente. Ya puede iniciar sesión.",
+  "usuario": {
+    "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "cedula": "0912345678",
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@montepiedra.edu.ec",
+    "rol": "alumno"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Datos inválidos o incompletos)
+Se devuelve cuando falta la cédula o cuando `conservar_cedula` es `false` y no se envió `nueva_password`:
+
+```json
+{
+  "error": "Debe proporcionar el campo 'nueva_password' o marcar 'conservar_cedula' como verdadero."
+}
+```
+
+###### Error 404 - Not Found (Usuario inexistente)
+Se devuelve cuando la cédula no corresponde a ningún usuario registrado:
+
+```json
+{
+  "error": "Usuario no encontrado. Verifique la cédula proporcionada."
+}
+```
+
+###### Error 500 - Internal Server Error
+Se devuelve ante fallos al guardar el hash en Supabase o errores inesperados:
+
+```json
+{
+  "error": "Error al actualizar la contraseña del usuario en la base de datos",
+  "details": "Mensaje técnico del error"
+}
+```
+

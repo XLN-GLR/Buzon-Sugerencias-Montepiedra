@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import bcrypt from 'bcrypt';
 import { createClient } from '@supabase/supabase-js';
 import { Config } from './config.js';
 
@@ -349,7 +350,7 @@ app.delete('/sugerencias/:id', async (req, res) => {
   const userRole = req.headers['x-user-role']; // Simulación temporal de rol hasta implementar Auth
 
   // Validación de rol administrador
-  if (userRole !== 'administrador') {
+  if (userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren privilegios de administrador."
     });
@@ -381,6 +382,186 @@ app.delete('/sugerencias/:id', async (req, res) => {
     console.error("Error al eliminar sugerencia en Supabase:", error);
     return res.status(500).json({
       error: "Error interno del servidor al eliminar la sugerencia",
+      details: error.message
+    });
+  }
+});
+
+// =======================================================
+// MÓDULO 1: AUTENTICACIÓN Y PRIMER INGRESO
+// =======================================================
+
+// Ruta para inicio de sesión (Login de usuarios)
+app.post('/auth/login', async (req, res) => {
+  const { cedula, password } = req.body;
+
+  // 1. Validación de campos obligatorios iniciales
+  if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
+    return res.status(400).json({
+      error: "El campo 'cedula' es obligatorio."
+    });
+  }
+
+  try {
+    // 2. Buscar al usuario por cédula en Supabase
+    const { data: usuario, error: fetchError } = await supabase
+      .from('usuarios')
+      .select('id, cedula, nombre, correo, rol, foto_url, password, es_primer_ingreso')
+      .eq('cedula', cedula.trim())
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Error al consultar usuario en Supabase:", fetchError);
+      return res.status(500).json({
+        error: "Error interno del servidor al consultar el usuario",
+        details: fetchError.message
+      });
+    }
+
+    // 3. Validar existencia del usuario
+    if (!usuario) {
+      return res.status(404).json({
+        error: "Usuario no encontrado. Verifique la cédula ingresada."
+      });
+    }
+
+    // 4. Caso Primer Ingreso: retornar requiere_configuracion y datos de usuario
+    if (usuario.es_primer_ingreso) {
+      return res.status(200).json({
+        message: "Primer ingreso detectado. Se requiere configurar la contraseña.",
+        requiere_configuracion: true,
+        usuario: {
+          id: usuario.id,
+          cedula: usuario.cedula,
+          nombre: usuario.nombre,
+          correo: usuario.correo,
+          rol: usuario.rol,
+          foto_url: usuario.foto_url
+        }
+      });
+    }
+
+    // 5. Caso Ingreso Regular: validar contraseña con hash en BD mediante bcrypt
+    if (!password || typeof password !== 'string' || !password.trim()) {
+      return res.status(400).json({
+        error: "El campo 'password' es obligatorio para el inicio de sesión regular."
+      });
+    }
+
+    if (!usuario.password) {
+      return res.status(401).json({
+        error: "El usuario no tiene una contraseña configurada en el sistema. Por favor, comuníquese con el administrador."
+      });
+    }
+
+    const passwordValido = await bcrypt.compare(password, usuario.password);
+
+    if (!passwordValido) {
+      return res.status(401).json({
+        error: "Credenciales inválidas. Contraseña incorrecta."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Inicio de sesión exitoso",
+      requiere_configuracion: false,
+      usuario: {
+        id: usuario.id,
+        cedula: usuario.cedula,
+        nombre: usuario.nombre,
+        correo: usuario.correo,
+        rol: usuario.rol,
+        foto_url: usuario.foto_url
+      }
+    });
+  } catch (error) {
+    console.error("Error inesperado en /auth/login:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor durante la autenticación",
+      details: error.message
+    });
+  }
+});
+
+// Ruta para configurar la contraseña en el primer ingreso
+app.post('/auth/primer-ingreso', async (req, res) => {
+  const { cedula, nueva_password, conservar_cedula } = req.body;
+
+  // 1. Validación de cédula
+  if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
+    return res.status(400).json({
+      error: "El campo 'cedula' es obligatorio."
+    });
+  }
+
+  // 2. Validación de contraseña requerida si no se desea conservar la cédula
+  const conservarCedulaComoPassword = Boolean(conservar_cedula);
+  if (!conservarCedulaComoPassword && (!nueva_password || typeof nueva_password !== 'string' || !nueva_password.trim())) {
+    return res.status(400).json({
+      error: "Debe proporcionar el campo 'nueva_password' o marcar 'conservar_cedula' como verdadero."
+    });
+  }
+
+  try {
+    // 3. Verificar que el usuario exista en Supabase
+    const { data: usuario, error: fetchError } = await supabase
+      .from('usuarios')
+      .select('id, cedula, es_primer_ingreso')
+      .eq('cedula', cedula.trim())
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Error al consultar usuario en Supabase:", fetchError);
+      return res.status(500).json({
+        error: "Error interno del servidor al consultar el usuario",
+        details: fetchError.message
+      });
+    }
+
+    if (!usuario) {
+      return res.status(404).json({
+        error: "Usuario no encontrado. Verifique la cédula proporcionada."
+      });
+    }
+
+    // 4. Determinar la contraseña a encriptar y generar el hash con bcrypt (10 rounds)
+    const passwordAEncriptar = conservarCedulaComoPassword ? cedula.trim() : nueva_password.trim();
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(passwordAEncriptar, saltRounds);
+
+    // 5. Actualizar la contraseña en Supabase y cambiar es_primer_ingreso a false
+    const { data: updatedData, error: updateError } = await supabase
+      .from('usuarios')
+      .update({
+        password: hashedPassword,
+        es_primer_ingreso: false
+      })
+      .eq('id', usuario.id)
+      .select('id, cedula, nombre, correo, rol')
+      .single();
+
+    if (updateError) {
+      console.error("Error al actualizar contraseña en Supabase:", updateError);
+      return res.status(500).json({
+        error: "Error al actualizar la contraseña del usuario en la base de datos",
+        details: updateError.message
+      });
+    }
+
+    return res.status(200).json({
+      message: "Contraseña configurada exitosamente. Ya puede iniciar sesión.",
+      usuario: {
+        id: updatedData.id,
+        cedula: updatedData.cedula,
+        nombre: updatedData.nombre,
+        correo: updatedData.correo,
+        rol: updatedData.rol
+      }
+    });
+  } catch (error) {
+    console.error("Error inesperado en /auth/primer-ingreso:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al procesar el primer ingreso",
       details: error.message
     });
   }
