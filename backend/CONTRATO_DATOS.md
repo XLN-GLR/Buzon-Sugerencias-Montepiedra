@@ -806,3 +806,243 @@ Se devuelve ante fallos al guardar el hash en Supabase o errores inesperados:
 }
 ```
 
+---
+
+### 🔧 Módulo de Mantenimiento y Seguimiento de Tareas
+
+Este módulo expone endpoints orientados al equipo de mantenimiento de infraestructura y coordinadores, para gestionar tareas operativas y dar seguimiento a las sugerencias de la institución educativa. Todas las rutas de este módulo están protegidas y requieren que el encabezado `x-user-role` sea `mantenimiento` o `admin`.
+
+---
+
+#### 1. Obtener Sugerencias de Mantenimiento
+
+Permite recuperar el listado de sugerencias que han sido aprobadas por moderación y pertenecen estrictamente a la categoría `Infraestructura`.
+
+- **Método:** `GET`
+- **Ruta:** `/sugerencias/mantenimiento`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Valores permitidos: `mantenimiento`, `admin`)
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+```json
+{
+  "message": "Sugerencias de mantenimiento recuperadas exitosamente",
+  "data": [
+    {
+      "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+      "created_at": "2026-06-25T02:01:15.123Z",
+      "titulo": "Reparar luminarias en el patio central",
+      "descripcion": "Varios focos del patio no encienden durante la noche.",
+      "categoria": "Infraestructura",
+      "es_anonimo": false,
+      "votos": 10,
+      "likes": 8,
+      "dislikes": 2,
+      "estado": "aprobada",
+      "respuesta_moderador": "Aprobado para gestión de mantenimiento.",
+      "usuarios": {
+        "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+        "nombre": "Carlos Mendoza",
+        "correo": "carlos.mendoza@montepiedra.edu.ec",
+        "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos"
+      }
+    }
+  ]
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al obtener las sugerencias de mantenimiento",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 2. Actualizar Estado de una Sugerencia
+
+Permite al personal de mantenimiento o administradores actualizar el estado del ciclo de vida de una sugerencia (ej. `en_proceso`, `realizada`, `aprobada`, etc.).
+
+- **Método:** `PATCH`
+- **Ruta:** `/sugerencias/:id/estado`
+- **Encabezados requeridos:** 
+  * `Content-Type: application/json`
+  * `x-user-role` (Valores permitidos: `mantenimiento`, `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "estado": "en_proceso"
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+```json
+{
+  "message": "Estado de la sugerencia actualizado exitosamente",
+  "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+  "estado": "en_proceso",
+  "data": {
+    "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+    "titulo": "Reparar luminarias en el patio central",
+    "estado": "en_proceso",
+    "categoria": "Infraestructura"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Falta el estado)
+```json
+{
+  "error": "El campo 'estado' es obligatorio."
+}
+```
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+}
+```
+
+###### Error 404 - Not Found (Sugerencia no encontrada)
+```json
+{
+  "error": "La sugerencia especificada no existe."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al actualizar el estado de la sugerencia",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 3. Crear Tarea de Mantenimiento
+
+Permite registrar una nueva tarea operativa asignada para atender un requerimiento o sugerencia de infraestructura.
+
+- **Método:** `POST`
+- **Ruta:** `/mantenimiento/tareas`
+- **Encabezados requeridos:** 
+  * `Content-Type: application/json`
+  * `x-user-role` (Valores permitidos: `mantenimiento`, `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "sugerencia_id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+  "titulo": "Comprar focos LED y coordinar electricista",
+  "creado_por": "60685e1f-3d41-42c2-b9a6-d71739856b22"
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 201 Created)
+
+```json
+{
+  "message": "Tarea de mantenimiento creada exitosamente",
+  "tarea": {
+    "id": "e890a4f5-9df2-4609-cd12-f35ef345b0a0",
+    "sugerencia_id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+    "titulo": "Comprar focos LED y coordinar electricista",
+    "creado_por": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "created_at": "2026-06-25T03:00:00.000Z"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Faltan campos requeridos)
+```json
+{
+  "error": "El campo 'sugerencia_id' es obligatorio."
+}
+```
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al registrar la tarea de mantenimiento",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 4. Eliminar Tarea de Mantenimiento
+
+Permite eliminar una tarea específica a través de su identificador UUID.
+
+- **Método:** `DELETE`
+- **Ruta:** `/mantenimiento/tareas/:id`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Valores permitidos: `mantenimiento`, `admin`)
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+```json
+{
+  "message": "Tarea de mantenimiento eliminada exitosamente",
+  "tarea": {
+    "id": "e890a4f5-9df2-4609-cd12-f35ef345b0a0",
+    "sugerencia_id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
+    "titulo": "Comprar focos LED y coordinar electricista"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+}
+```
+
+###### Error 404 - Not Found (Tarea inexistente)
+```json
+{
+  "error": "No se encontró ninguna tarea de mantenimiento con el ID proporcionado."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al eliminar la tarea de mantenimiento",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+

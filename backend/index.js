@@ -856,6 +856,244 @@ app.post('/auth/primer-ingreso', async (req, res) => {
   }
 });
 
+// =======================================================
+// MÓDULO 4: MANTENIMIENTO Y SEGUIMIENTO DE TAREAS
+// =======================================================
+
+// 1. Ruta para obtener sugerencias asignadas a mantenimiento (Aprobadas e Infraestructura)
+app.get('/sugerencias/mantenimiento', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Mantenimiento o Admin)
+  if (userRole !== 'mantenimiento' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sugerencias')
+      .select('*, usuarios (id, nombre, correo, foto_url)')
+      .eq('estado', 'aprobada')
+      .eq('categoria', 'Infraestructura')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error al obtener sugerencias de mantenimiento en Supabase:", error);
+      return res.status(500).json({
+        error: "Error interno del servidor al obtener las sugerencias de mantenimiento",
+        details: error.message
+      });
+    }
+
+    const processedData = data.map(sugerencia => {
+      let usuarioInfo = sugerencia.usuarios;
+      if (Array.isArray(usuarioInfo)) {
+        usuarioInfo = usuarioInfo[0] || null;
+      }
+
+      return {
+        id: sugerencia.id,
+        created_at: sugerencia.created_at,
+        titulo: sugerencia.titulo,
+        descripcion: sugerencia.descripcion,
+        categoria: sugerencia.categoria,
+        es_anonimo: sugerencia.es_anonimo ?? false,
+        votos: sugerencia.votos ?? 0,
+        likes: sugerencia.likes ?? 0,
+        dislikes: sugerencia.dislikes ?? 0,
+        estado: sugerencia.estado,
+        respuesta_moderador: sugerencia.respuesta_moderador || null,
+        usuarios: usuarioInfo ? {
+          id: usuarioInfo.id,
+          nombre: usuarioInfo.nombre,
+          correo: usuarioInfo.correo,
+          foto_url: usuarioInfo.foto_url
+        } : null
+      };
+    });
+
+    return res.status(200).json({
+      message: "Sugerencias de mantenimiento recuperadas exitosamente",
+      data: processedData
+    });
+  } catch (error) {
+    console.error("Error inesperado en GET /sugerencias/mantenimiento:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al obtener las sugerencias de mantenimiento",
+      details: error.message
+    });
+  }
+});
+
+// 2. Ruta para actualizar el estado de una sugerencia (ej. en_proceso, realizada)
+app.patch('/sugerencias/:id/estado', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role'];
+  const { estado } = req.body;
+
+  // Validación de permisos de acceso (Mantenimiento o Admin)
+  if (userRole !== 'mantenimiento' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+    });
+  }
+
+  if (!estado || typeof estado !== 'string' || !estado.trim()) {
+    return res.status(400).json({
+      error: "El campo 'estado' es obligatorio."
+    });
+  }
+
+  try {
+    const { data: updatedData, error: updateError } = await supabase
+      .from('sugerencias')
+      .update({ estado: estado.trim() })
+      .eq('id', id)
+      .select('id, titulo, estado, categoria')
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("Error al actualizar estado en Supabase:", updateError);
+      return res.status(500).json({
+        error: "Error interno del servidor al actualizar el estado de la sugerencia",
+        details: updateError.message
+      });
+    }
+
+    if (!updatedData) {
+      return res.status(404).json({
+        error: "La sugerencia especificada no existe."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Estado de la sugerencia actualizado exitosamente",
+      id: updatedData.id,
+      estado: updatedData.estado,
+      data: updatedData
+    });
+  } catch (error) {
+    console.error("Error inesperado en PATCH /sugerencias/:id/estado:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al actualizar el estado de la sugerencia",
+      details: error.message
+    });
+  }
+});
+
+// 3. Ruta para crear una nueva tarea de mantenimiento
+app.post('/mantenimiento/tareas', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Mantenimiento o Admin)
+  if (userRole !== 'mantenimiento' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+    });
+  }
+
+  const { sugerencia_id, titulo, creado_por } = req.body;
+
+  if (!sugerencia_id || typeof sugerencia_id !== 'string' || !sugerencia_id.trim()) {
+    return res.status(400).json({
+      error: "El campo 'sugerencia_id' es obligatorio."
+    });
+  }
+
+  if (!titulo || typeof titulo !== 'string' || !titulo.trim()) {
+    return res.status(400).json({
+      error: "El campo 'titulo' es obligatorio."
+    });
+  }
+
+  if (!creado_por || typeof creado_por !== 'string' || !creado_por.trim()) {
+    return res.status(400).json({
+      error: "El campo 'creado_por' es obligatorio."
+    });
+  }
+
+  try {
+    const { data: nuevaTarea, error: insertError } = await supabase
+      .from('tareas_mantenimiento')
+      .insert([
+        {
+          sugerencia_id: sugerencia_id.trim(),
+          titulo: titulo.trim(),
+          creado_por: creado_por.trim()
+        }
+      ])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Error al registrar tarea de mantenimiento en Supabase:", insertError);
+      return res.status(500).json({
+        error: "Error interno del servidor al registrar la tarea de mantenimiento",
+        details: insertError.message
+      });
+    }
+
+    return res.status(201).json({
+      message: "Tarea de mantenimiento creada exitosamente",
+      tarea: nuevaTarea
+    });
+  } catch (error) {
+    console.error("Error inesperado en POST /mantenimiento/tareas:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al crear la tarea de mantenimiento",
+      details: error.message
+    });
+  }
+});
+
+// 4. Ruta para eliminar una tarea de mantenimiento por su ID
+app.delete('/mantenimiento/tareas/:id', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Mantenimiento o Admin)
+  if (userRole !== 'mantenimiento' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tareas_mantenimiento')
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error("Error al eliminar tarea de mantenimiento en Supabase:", error);
+      return res.status(500).json({
+        error: "Error interno del servidor al eliminar la tarea de mantenimiento",
+        details: error.message
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        error: "No se encontró ninguna tarea de mantenimiento con el ID proporcionado."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Tarea de mantenimiento eliminada exitosamente",
+      tarea: data[0]
+    });
+  } catch (error) {
+    console.error("Error inesperado en DELETE /mantenimiento/tareas/:id:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al eliminar la tarea de mantenimiento",
+      details: error.message
+    });
+  }
+});
+
 // Iniciar servidor en el puerto local
 app.listen(Config.PORT, Config.HOST, () => {
   console.log(`Servidor backend listo en http://${Config.HOST}:${Config.PORT}`);
