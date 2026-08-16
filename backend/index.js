@@ -131,7 +131,7 @@ app.get('/sugerencias', async (req, res) => {
         }
       }
 
-      // Estructura exacta de salida requerida por el contrato (10 columnas + objeto usuarios)
+      // Estructura exacta de salida requerida por el contrato (columnas de sugerencia + objeto usuarios)
       return {
         id: sugerencia.id,
         created_at: sugerencia.created_at,
@@ -140,6 +140,8 @@ app.get('/sugerencias', async (req, res) => {
         categoria: sugerencia.categoria,
         es_anonimo: sugerencia.es_anonimo ?? false,
         votos: sugerencia.votos ?? 0,
+        likes: sugerencia.likes ?? 0,
+        dislikes: sugerencia.dislikes ?? 0,
         estado: sugerencia.estado || 'pendiente',
         respuesta_moderador: sugerencia.respuesta_moderador || null,
         usuarios: usuarioFinal
@@ -159,46 +161,119 @@ app.get('/sugerencias', async (req, res) => {
   }
 });
 
-// Ruta para registrar un voto (incrementar votos de una sugerencia)
+// Ruta para registrar un voto (Likes / Dislikes con restricción de un voto por usuario)
 app.post('/sugerencias/:id/votar', async (req, res) => {
   const { id } = req.params;
+  const { usuario_id, tipo_voto } = req.body;
+
+  // 1. Validación de campos obligatorios
+  if (!usuario_id || typeof usuario_id !== 'string' || !usuario_id.trim()) {
+    return res.status(400).json({
+      error: "El campo 'usuario_id' es obligatorio."
+    });
+  }
+
+  if (!tipo_voto || (tipo_voto !== 'like' && tipo_voto !== 'dislike')) {
+    return res.status(400).json({
+      error: "El campo 'tipo_voto' es inválido. Debe ser 'like' o 'dislike'."
+    });
+  }
 
   try {
-    // 1. Consultar los votos actuales de la sugerencia
-    const { data: sugerencia, error: fetchError } = await supabase
+    // 2. Verificar existencia de la sugerencia en Supabase
+    const { data: sugerencia, error: fetchSugerenciaError } = await supabase
       .from('sugerencias')
-      .select('votos')
+      .select('id, likes, dislikes')
       .eq('id', id)
       .maybeSingle();
 
-    // Si ocurre un error o la sugerencia no existe
-    if (fetchError || !sugerencia) {
+    if (fetchSugerenciaError) {
+      console.error("Error al consultar sugerencia en Supabase:", fetchSugerenciaError);
+      return res.status(500).json({
+        error: "Error interno del servidor al consultar la sugerencia",
+        details: fetchSugerenciaError.message
+      });
+    }
+
+    if (!sugerencia) {
       return res.status(404).json({
         error: "La sugerencia especificada no existe."
       });
     }
 
-    const nuevosVotos = (sugerencia.votos || 0) + 1;
+    // 3. Consultar si el usuario ya emitió un voto previo en esta sugerencia
+    const { data: votoExistente, error: fetchVotoError } = await supabase
+      .from('votos_sugerencias')
+      .select('id')
+      .eq('sugerencia_id', id)
+      .eq('usuario_id', usuario_id.trim())
+      .maybeSingle();
 
-    // 2. Actualizar el valor de votos en la base de datos
+    if (fetchVotoError) {
+      console.error("Error al verificar voto previo en Supabase:", fetchVotoError);
+      return res.status(500).json({
+        error: "Error interno del servidor al verificar el voto",
+        details: fetchVotoError.message
+      });
+    }
+
+    if (votoExistente) {
+      return res.status(400).json({
+        error: "Ya has emitido un voto para esta sugerencia"
+      });
+    }
+
+    // 4. Registrar el nuevo voto en la tabla votos_sugerencias
+    const { error: insertVotoError } = await supabase
+      .from('votos_sugerencias')
+      .insert([
+        {
+          sugerencia_id: id,
+          usuario_id: usuario_id.trim(),
+          tipo_voto: tipo_voto.trim()
+        }
+      ]);
+
+    if (insertVotoError) {
+      console.error("Error al insertar voto en votos_sugerencias:", insertVotoError);
+      return res.status(500).json({
+        error: "Error interno del servidor al registrar el voto",
+        details: insertVotoError.message
+      });
+    }
+
+    // 5. Incrementar el contador correspondiente (likes o dislikes) en la tabla sugerencias
+    const currentLikes = sugerencia.likes || 0;
+    const currentDislikes = sugerencia.dislikes || 0;
+
+    const actualizacionContadores = {
+      likes: tipo_voto === 'like' ? currentLikes + 1 : currentLikes,
+      dislikes: tipo_voto === 'dislike' ? currentDislikes + 1 : currentDislikes
+    };
+
     const { data: updatedData, error: updateError } = await supabase
       .from('sugerencias')
-      .update({ votos: nuevosVotos })
+      .update(actualizacionContadores)
       .eq('id', id)
-      .select('id, votos')
+      .select('id, likes, dislikes')
       .single();
 
     if (updateError) {
-      throw updateError;
+      console.error("Error al actualizar contadores en sugerencias:", updateError);
+      return res.status(500).json({
+        error: "Error interno del servidor al actualizar los contadores de la sugerencia",
+        details: updateError.message
+      });
     }
 
     return res.status(200).json({
       message: "Voto registrado exitosamente",
       id: updatedData.id,
-      votos: updatedData.votos
+      likes: updatedData.likes,
+      dislikes: updatedData.dislikes
     });
   } catch (error) {
-    console.error("Error al registrar voto en Supabase:", error);
+    console.error("Error inesperado en /sugerencias/:id/votar:", error);
     return res.status(500).json({
       error: "Error interno del servidor al registrar el voto",
       details: error.message

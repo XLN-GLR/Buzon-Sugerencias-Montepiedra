@@ -163,27 +163,63 @@ Se devuelve cuando ocurre un error en el servidor al consultar los registros:
 
 ---
 
-#### 3. Registrar un Voto en una Sugerencia
+#### 3. Registrar un Voto en una Sugerencia (Likes / Dislikes)
 
-Permite realizar un incremento de `+1` en la columna de votos para una sugerencia en específico.
+Permite a un usuario emitir un voto (`like` o `dislike`) en una sugerencia determinada. El sistema restringe a **un único voto por usuario** para cada sugerencia mediante la tabla de control `votos_sugerencias`.
 
 - **Método:** `POST`
 - **Ruta:** `/sugerencias/:id/votar`
-- **Encabezados requeridos:** Ninguno en específico.
+- **Encabezado requerido:** `Content-Type: application/json`
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+  "tipo_voto": "like"
+}
+```
+
+> **Nota:** El campo `tipo_voto` solo admite los valores `"like"` o `"dislike"`.
 
 ##### 📤 Respuestas de Éxito (Status 200 OK)
 
-Si la operación en la base de datos es exitosa, devuelve el ID de la sugerencia y el número total de votos ya actualizado tras el incremento:
+Si el voto se registra exitosamente en `votos_sugerencias` y se actualiza el contador correspondiente en `sugerencias`, retorna los contadores actualizados:
 
 ```json
 {
   "message": "Voto registrado exitosamente",
   "id": "d798a3e4-8cf1-4509-bc01-e24df234a9f9",
-  "votos": 16
+  "likes": 12,
+  "dislikes": 2
 }
 ```
 
 ##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Voto Duplicado)
+Se devuelve cuando el usuario ya ha emitido previamente un voto (`like` o `dislike`) en la misma sugerencia:
+
+```json
+{
+  "error": "Ya has emitido un voto para esta sugerencia"
+}
+```
+
+###### Error 400 - Bad Request (Datos inválidos o faltantes)
+Se devuelve cuando falta el `usuario_id` o el `tipo_voto` no es válido:
+
+```json
+{
+  "error": "El campo 'usuario_id' es obligatorio."
+}
+```
+o
+```json
+{
+  "error": "El campo 'tipo_voto' es inválido. Debe ser 'like' o 'dislike'."
+}
+```
 
 ###### Error 404 - Not Found (Sugerencia inexistente)
 Se devuelve cuando el UUID proporcionado en la URL no corresponde a ninguna sugerencia registrada en Supabase:

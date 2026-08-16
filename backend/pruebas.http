@@ -19,7 +19,18 @@ GET http://127.0.0.1:8080/sugerencias HTTP/1.1
 
 ###
 
-### 2. Eliminar una sugerencia - Intento sin rol de administrador (Debe retornar 403)
+### 2. Votar una sugerencia (Like / Dislike con control de un voto por usuario)
+POST http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9/votar HTTP/1.1
+Content-Type: application/json
+
+{
+  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+  "tipo_voto": "like"
+}
+
+###
+
+### 3. Eliminar una sugerencia - Intento sin rol de administrador (Debe retornar 403)
 DELETE http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9 HTTP/1.1
 x-user-role: alumno
 
