@@ -74,3 +74,58 @@ Content-Type: application/json
   "conservar_cedula": false
 }
 
+###
+
+### 7. Secretaría - Registro Masivo de Nómina
+POST http://127.0.0.1:8080/usuarios/registro-masivo HTTP/1.1
+Content-Type: application/json
+x-user-role: secretaria
+
+{
+  "nomina": [
+    {
+      "cedula": "0912345678",
+      "nombre": "Carlos Mendoza",
+      "correo": "carlos.mendoza@montepiedra.edu.ec"
+    },
+    {
+      "cedula": "0987654321",
+      "nombre": "Juan Pérez",
+      "correo": "juan.perez@montepiedra.edu.ec"
+    }
+  ]
+}
+
+###
+
+### 8. Secretaría - Registro Manual Individual
+POST http://127.0.0.1:8080/usuarios HTTP/1.1
+Content-Type: application/json
+x-user-role: secretaria
+
+{
+  "cedula": "0923456789",
+  "nombre": "Pedro Gómez",
+  "correo": "pedro.gomez@montepiedra.edu.ec",
+  "rol": "alumno"
+}
+
+###
+
+### 9. Secretaría / Admin - Obtener todos los usuarios
+GET http://127.0.0.1:8080/usuarios HTTP/1.1
+x-user-role: admin
+
+###
+
+### 10. Secretaría / Admin - Obtener usuarios filtrados por rol
+GET http://127.0.0.1:8080/usuarios?rol=alumno HTTP/1.1
+x-user-role: secretaria
+
+###
+
+### 11. Secretaría / Admin - Eliminar Usuario
+DELETE http://127.0.0.1:8080/usuarios/60685e1f-3d41-42c2-b9a6-d71739856b22 HTTP/1.1
+x-user-role: admin
+
+

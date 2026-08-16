@@ -335,47 +335,261 @@ app.patch('/sugerencias/:id/moderacion', async (req, res) => {
   }
 });
 
-// Ruta para obtener todos los estudiantes (exclusivo para administradores)
-app.get('/usuarios/estudiantes', async (req, res) => {
+// =======================================================
+// MÓDULO 3: SECRETARÍA (GESTIÓN DE NÓMINAS Y USUARIOS)
+// =======================================================
+
+// 1. Ruta para registro masivo de usuarios (Nómina institucional)
+app.post('/usuarios/registro-masivo', async (req, res) => {
   const userRole = req.headers['x-user-role'];
 
-  // Validación de acceso exclusivo admin
-  if (userRole !== 'admin') {
+  // Validación de permisos de acceso (Secretaría o Admin)
+  if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de administrador."
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
     });
   }
 
-  try {
-    const { data: estudiantes, error } = await supabase
-      .from('usuarios')
-      .select('id, nombre, correo, foto_url')
-      .eq('rol', 'alumno');
+  const { nomina } = req.body;
 
-    if (error) {
-      throw error;
+  // Validación de estructura de nómina
+  if (!nomina || !Array.isArray(nomina) || nomina.length === 0) {
+    return res.status(400).json({
+      error: "El campo 'nomina' es obligatorio y debe ser un arreglo con al menos un usuario."
+    });
+  }
+
+  // Validar campos obligatorios de cada usuario en la nómina
+  for (let i = 0; i < nomina.length; i++) {
+    const item = nomina[i];
+    if (!item.cedula || !item.nombre || !item.correo) {
+      return res.status(400).json({
+        error: `El usuario en la posición ${i + 1} no cuenta con todos los campos obligatorios ('cedula', 'nombre', 'correo').`
+      });
+    }
+  }
+
+  try {
+    const saltRounds = 10;
+
+    // Procesar y encriptar la cédula de cada usuario para su contraseña por defecto
+    const usuariosParaInsertar = await Promise.all(
+      nomina.map(async (usuario) => {
+        const hashedPassword = await bcrypt.hash(String(usuario.cedula).trim(), saltRounds);
+        return {
+          cedula: String(usuario.cedula).trim(),
+          nombre: String(usuario.nombre).trim(),
+          correo: String(usuario.correo).trim(),
+          rol: usuario.rol ? String(usuario.rol).trim() : 'alumno',
+          password: hashedPassword,
+          es_primer_ingreso: true,
+          foto_url: usuario.foto_url ? String(usuario.foto_url).trim() : null
+        };
+      })
+    );
+
+    // Inserción masiva en Supabase
+    const { data: usuariosInsertados, error: insertError } = await supabase
+      .from('usuarios')
+      .insert(usuariosParaInsertar)
+      .select('id, cedula, nombre, correo, rol, es_primer_ingreso');
+
+    if (insertError) {
+      console.error("Error al registrar nómina masiva en Supabase:", insertError);
+      return res.status(500).json({
+        error: "Error interno del servidor al registrar la nómina en la base de datos",
+        details: insertError.message
+      });
     }
 
-    return res.status(200).json(estudiantes);
+    return res.status(201).json({
+      message: "Nómina de usuarios registrada exitosamente",
+      total_registrados: usuariosInsertados.length,
+      usuarios: usuariosInsertados
+    });
   } catch (error) {
-    console.error("Error al obtener estudiantes de Supabase:", error);
+    console.error("Error inesperado en /usuarios/registro-masivo:", error);
     return res.status(500).json({
-      error: "Error interno del servidor al obtener los estudiantes",
+      error: "Error interno del servidor al procesar el registro masivo",
       details: error.message
     });
   }
 });
 
-// Ruta para actualizar la foto de perfil de un estudiante (exclusivo para administradores)
+// 2. Ruta para registro individual manual de usuarios
+app.post('/usuarios', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Secretaría o Admin)
+  if (userRole !== 'secretaria' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+    });
+  }
+
+  const { cedula, nombre, correo, rol, foto_url } = req.body;
+
+  // Validación de campos requeridos
+  if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
+    return res.status(400).json({
+      error: "El campo 'cedula' es obligatorio."
+    });
+  }
+
+  if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
+    return res.status(400).json({
+      error: "El campo 'nombre' es obligatorio."
+    });
+  }
+
+  if (!correo || typeof correo !== 'string' || !correo.trim()) {
+    return res.status(400).json({
+      error: "El campo 'correo' es obligatorio."
+    });
+  }
+
+  try {
+    // Encriptar la cédula como contraseña por defecto
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(cedula.trim(), saltRounds);
+
+    // Inserción en la base de datos de Supabase
+    const { data: nuevoUsuario, error: insertError } = await supabase
+      .from('usuarios')
+      .insert([
+        {
+          cedula: cedula.trim(),
+          nombre: nombre.trim(),
+          correo: correo.trim(),
+          rol: rol ? String(rol).trim() : 'alumno',
+          password: hashedPassword,
+          es_primer_ingreso: true,
+          foto_url: foto_url ? String(foto_url).trim() : null
+        }
+      ])
+      .select('id, cedula, nombre, correo, rol, es_primer_ingreso, foto_url')
+      .single();
+
+    if (insertError) {
+      console.error("Error al registrar usuario en Supabase:", insertError);
+      return res.status(500).json({
+        error: "Error interno del servidor al crear el usuario",
+        details: insertError.message
+      });
+    }
+
+    return res.status(201).json({
+      message: "Usuario registrado exitosamente",
+      usuario: nuevoUsuario
+    });
+  } catch (error) {
+    console.error("Error inesperado en POST /usuarios:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al procesar el registro del usuario",
+      details: error.message
+    });
+  }
+});
+
+// 3. Ruta para obtener usuarios (con filtro opcional por query ?rol=valor)
+app.get('/usuarios', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Secretaría o Admin)
+  if (userRole !== 'secretaria' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+    });
+  }
+
+  const { rol } = req.query;
+
+  try {
+    let query = supabase
+      .from('usuarios')
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
+      .order('nombre', { ascending: true });
+
+    if (rol && typeof rol === 'string' && rol.trim()) {
+      query = query.eq('rol', rol.trim());
+    }
+
+    const { data: usuarios, error: fetchError } = await query;
+
+    if (fetchError) {
+      console.error("Error al obtener usuarios de Supabase:", fetchError);
+      return res.status(500).json({
+        error: "Error interno del servidor al obtener los usuarios",
+        details: fetchError.message
+      });
+    }
+
+    return res.status(200).json(usuarios);
+  } catch (error) {
+    console.error("Error inesperado en GET /usuarios:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al obtener los usuarios",
+      details: error.message
+    });
+  }
+});
+
+// 4. Ruta para eliminar un usuario por su ID
+app.delete('/usuarios/:id', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role'];
+
+  // Validación de permisos de acceso (Secretaría o Admin)
+  if (userRole !== 'secretaria' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .delete()
+      .eq('id', id)
+      .select('id, cedula, nombre, correo, rol');
+
+    if (error) {
+      console.error("Error al eliminar usuario en Supabase:", error);
+      return res.status(500).json({
+        error: "Error interno del servidor al eliminar el usuario",
+        details: error.message
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        error: "No se encontró ningún usuario con el ID proporcionado."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Usuario eliminado exitosamente",
+      usuario: data[0]
+    });
+  } catch (error) {
+    console.error("Error inesperado en DELETE /usuarios/:id:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al eliminar el usuario",
+      details: error.message
+    });
+  }
+});
+
+// Ruta para actualizar la foto de perfil de un estudiante o usuario
 app.put('/usuarios/:id/foto', async (req, res) => {
   const { id } = req.params;
   const userRole = req.headers['x-user-role'];
   const { foto_url } = req.body;
 
-  // Validación de acceso exclusivo admin
-  if (userRole !== 'admin') {
+  // Validación de acceso secretaría o admin
+  if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de administrador."
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
     });
   }
 

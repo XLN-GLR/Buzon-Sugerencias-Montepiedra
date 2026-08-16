@@ -305,36 +305,190 @@ Se devuelve ante fallas de comunicación con la base de datos o fallos internos 
 
 ---
 
-### 👥 Módulo de Administración de Estudiantes (Exclusivo Admin)
+### 👥 Módulo de Secretaría (Gestión de Nóminas y Usuarios)
 
-Este módulo expone endpoints orientados a la gestión y actualización de la información de los estudiantes, restringidos para uso exclusivo del rol `admin`.
+Este módulo expone endpoints orientados a la gestión institucional de nóminas, registro individual de usuarios, consulta con filtros y eliminación de cuentas. Todas las rutas de este módulo están protegidas y requieren que el encabezado `x-user-role` sea `secretaria` o `admin`.
 
-#### 1. Obtener Estudiantes
+---
 
-Permite recuperar el listado de todos los usuarios registrados con rol de alumno/estudiante.
+#### 1. Registro Masivo de Usuarios (Nómina)
+
+Permite procesar e insertar en masa una lista de estudiantes o personal. El backend encripta automáticamente la cédula de cada usuario con `bcrypt` para establecerla como su contraseña por defecto, asigna el rol `alumno` (o el especificado) y marca `es_primer_ingreso: true`.
+
+- **Método:** `POST`
+- **Ruta:** `/usuarios/registro-masivo`
+- **Encabezados requeridos:** 
+  * `Content-Type: application/json`
+  * `x-user-role` (Valores permitidos: `secretaria`, `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "nomina": [
+    {
+      "cedula": "0912345678",
+      "nombre": "Carlos Mendoza",
+      "correo": "carlos.mendoza@montepiedra.edu.ec"
+    },
+    {
+      "cedula": "0987654321",
+      "nombre": "Juan Pérez",
+      "correo": "juan.perez@montepiedra.edu.ec"
+    }
+  ]
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 201 Created)
+
+```json
+{
+  "message": "Nómina de usuarios registrada exitosamente",
+  "total_registrados": 2,
+  "usuarios": [
+    {
+      "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "cedula": "0912345678",
+      "nombre": "Carlos Mendoza",
+      "correo": "carlos.mendoza@montepiedra.edu.ec",
+      "rol": "alumno",
+      "es_primer_ingreso": true
+    },
+    {
+      "id": "71796f2a-4e52-53d3-c0b7-e82840967c33",
+      "cedula": "0987654321",
+      "nombre": "Juan Pérez",
+      "correo": "juan.perez@montepiedra.edu.ec",
+      "rol": "alumno",
+      "es_primer_ingreso": true
+    }
+  ]
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Estructura de nómina inválida o campos faltantes)
+```json
+{
+  "error": "El campo 'nomina' es obligatorio y debe ser un arreglo con al menos un usuario."
+}
+```
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de secretaría o administrador."
+}
+```
+
+###### Error 500 - Internal Server Error (Error al insertar en base de datos)
+```json
+{
+  "error": "Error interno del servidor al registrar la nómina en la base de datos",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 2. Registro Manual de Usuario Individual
+
+Permite registrar manualmente a un nuevo usuario en la plataforma. Encripta la cédula con `bcrypt` para su contraseña inicial y establece `es_primer_ingreso: true`.
+
+- **Método:** `POST`
+- **Ruta:** `/usuarios`
+- **Encabezados requeridos:** 
+  * `Content-Type: application/json`
+  * `x-user-role` (Valores permitidos: `secretaria`, `admin`)
+
+##### 📥 JSON que debe enviar el Frontend (Request Body)
+
+```json
+{
+  "cedula": "0923456789",
+  "nombre": "Pedro Gómez",
+  "correo": "pedro.gomez@montepiedra.edu.ec",
+  "rol": "alumno"
+}
+```
+
+##### 📤 Respuestas de Éxito (Status 201 Created)
+
+```json
+{
+  "message": "Usuario registrado exitosamente",
+  "usuario": {
+    "id": "82807g3b-5f63-64e4-d1c8-f93951078d44",
+    "cedula": "0923456789",
+    "nombre": "Pedro Gómez",
+    "correo": "pedro.gomez@montepiedra.edu.ec",
+    "rol": "alumno",
+    "es_primer_ingreso": true,
+    "foto_url": null
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 400 - Bad Request (Faltan campos obligatorios)
+```json
+{
+  "error": "El campo 'cedula' es obligatorio."
+}
+```
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de secretaría o administrador."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al crear el usuario",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 3. Obtener Usuarios (con filtro opcional por rol)
+
+Permite recuperar la lista de usuarios registrados. Soporta el parámetro opcional `?rol=valor` en la URL para filtrar por roles como `alumno`, `profesor`, `secretaria` o `admin`. Por motivos de seguridad, nunca se retorna el hash de la contraseña.
 
 - **Método:** `GET`
-- **Ruta:** `/usuarios/estudiantes`
+- **Ruta:** `/usuarios` o `/usuarios?rol=alumno`
 - **Encabezados requeridos:** 
-  * `x-user-role` (Debe ser: `admin`)
+  * `x-user-role` (Valores permitidos: `secretaria`, `admin`)
 
 ##### 📤 Respuestas de Éxito (Status 200 OK)
-
-Retorna un arreglo con la información básica de los estudiantes encontrados en la base de datos:
 
 ```json
 [
   {
     "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "cedula": "0912345678",
     "nombre": "Carlos Mendoza",
     "correo": "carlos.mendoza@montepiedra.edu.ec",
-    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos"
+    "rol": "alumno",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos",
+    "es_primer_ingreso": false,
+    "created_at": "2026-06-25T02:01:15.123Z"
   },
   {
     "id": "71796f2a-4e52-53d3-c0b7-e82840967c33",
+    "cedula": "0987654321",
     "nombre": "Juan Pérez",
     "correo": "juan.perez@montepiedra.edu.ec",
-    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan"
+    "rol": "alumno",
+    "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan",
+    "es_primer_ingreso": true,
+    "created_at": "2026-06-25T02:05:00.000Z"
   }
 ]
 ```
@@ -342,24 +496,81 @@ Retorna un arreglo con la información básica de los estudiantes encontrados en
 ##### ❌ Respuestas de Error
 
 ###### Error 403 - Forbidden (Permisos insuficientes)
-Se devuelve cuando el rol especificado no corresponde al administrador:
-
 ```json
 {
-  "error": "Acceso denegado. Se requieren permisos de administrador."
+  "error": "Acceso denegado. Se requieren permisos de secretaría o administrador."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al obtener los usuarios",
+  "details": "Mensaje técnico detallado del error"
 }
 ```
 
 ---
 
-#### 2. Actualizar Foto de Perfil
+#### 4. Eliminar Usuario
 
-Permite a los administradores actualizar la dirección URL de la foto de perfil para un estudiante determinado.
+Permite eliminar el registro de un usuario en el sistema a través de su identificador UUID.
+
+- **Método:** `DELETE`
+- **Ruta:** `/usuarios/:id`
+- **Encabezados requeridos:** 
+  * `x-user-role` (Valores permitidos: `secretaria`, `admin`)
+
+##### 📤 Respuestas de Éxito (Status 200 OK)
+
+```json
+{
+  "message": "Usuario eliminado exitosamente",
+  "usuario": {
+    "id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+    "cedula": "0912345678",
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@montepiedra.edu.ec",
+    "rol": "alumno"
+  }
+}
+```
+
+##### ❌ Respuestas de Error
+
+###### Error 403 - Forbidden (Permisos insuficientes)
+```json
+{
+  "error": "Acceso denegado. Se requieren permisos de secretaría o administrador."
+}
+```
+
+###### Error 404 - Not Found (Usuario inexistente)
+```json
+{
+  "error": "No se encontró ningún usuario con el ID proporcionado."
+}
+```
+
+###### Error 500 - Internal Server Error
+```json
+{
+  "error": "Error interno del servidor al eliminar el usuario",
+  "details": "Mensaje técnico detallado del error"
+}
+```
+
+---
+
+#### 5. Actualizar Foto de Perfil
+
+Permite a secretaría y administradores actualizar la dirección URL de la foto de perfil para un usuario determinado.
 
 - **Método:** `PUT`
 - **Ruta:** `/usuarios/:id/foto`
 - **Encabezados requeridos:** 
-  * `x-user-role` (Debe ser: `admin`)
+  * `Content-Type: application/json`
+  * `x-user-role` (Valores permitidos: `secretaria`, `admin`)
 
 ##### 📥 JSON que debe enviar el Frontend (Request Body)
 
@@ -384,17 +595,13 @@ Si la actualización es exitosa, se retorna el objeto de confirmación con la nu
 ##### ❌ Respuestas de Error
 
 ###### Error 403 - Forbidden (Permisos insuficientes)
-Se devuelve cuando el rol del consultor no es `admin`:
-
 ```json
 {
-  "error": "Acceso denegado. Se requieren permisos de administrador."
+  "error": "Acceso denegado. Se requieren permisos de secretaría o administrador."
 }
 ```
 
 ###### Error 404 - Not Found (Usuario inexistente)
-Se devuelve cuando el UUID en la ruta no corresponde a ningún usuario registrado en Supabase:
-
 ```json
 {
   "error": "El usuario especificado no existe."
@@ -402,8 +609,6 @@ Se devuelve cuando el UUID en la ruta no corresponde a ningún usuario registrad
 ```
 
 ###### Error 500 - Internal Server Error
-Se devuelve ante fallas de comunicación con la base de datos o fallos internos del servidor:
-
 ```json
 {
   "error": "Error interno del servidor al actualizar la foto de perfil",
