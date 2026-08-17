@@ -25,7 +25,10 @@ export default function Profile() {
     switch (rol) {
       case 'alumno': return 'Estudiante';
       case 'profesor': return 'Profesor';
-      case 'administrador': return 'Administrador';
+      case 'administrador':
+      case 'admin': return 'Administrador';
+      case 'mantenimiento': return 'Mantenimiento';
+      case 'secretaria': return 'Secretaría';
       default: return rol;
     }
   };

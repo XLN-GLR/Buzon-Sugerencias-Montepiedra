@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api, encodeDescription } from '../utils/api';
+import { api } from '../utils/api';
 import './Pages.css';
 
-// Strict array of forbidden words (Spanish insults and inappropriate terms)
+// Lista de palabras prohibidas para moderación previa en frontend (coincidente con backend)
 const FORBIDDEN_WORDS = [
   'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón', 
   'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil', 
@@ -15,14 +15,14 @@ export default function SuggestionForm() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Academico');
   const [description, setDescription] = useState('');
-  const [author, setAuthor] = useState('');
+  const [fotoUrl, setFotoUrl] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saveSource, setSaveSource] = useState('backend');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Checks if text contains any forbidden words (case-insensitive)
+  // Verificación de lenguaje inapropiado
   const hasProfanity = (text) => {
     if (!text) return false;
     const lower = text.toLowerCase();
@@ -37,39 +37,40 @@ export default function SuggestionForm() {
     setErrorMessage('');
     setSubmitted(false);
 
-    // Moderation check: Profanity filter validation
+    // Validación anti-groserías
     if (hasProfanity(title) || hasProfanity(description)) {
       setErrorMessage('⚠️ ¡ATENCIÓN! Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.');
       setLoading(false);
       return;
     }
 
-    // Determine target author name (use form field or fall back to logged-in user name)
-    const authorName = isAnonymous ? user.nombre : (author.trim() || user.nombre);
-    
-    // Encode description with author metadata and anonymity flag
-    const encodedDesc = encodeDescription(description, authorName, isAnonymous);
-
     try {
-      const result = await api.createSuggestion(
-        title,
-        encodedDesc,
-        category,
-        user.usuario_id
-      );
+      const result = await api.createSuggestion({
+        titulo: title,
+        descripcion: description,
+        categoria: category,
+        usuario_id: user.usuario_id || user.cedula,
+        es_anonimo: isAnonymous,
+        foto_url: fotoUrl.trim() || null,
+        userRole: user.rol,
+        authorProfile: {
+          id: user.usuario_id || user.cedula,
+          nombre: user.nombre,
+          correo: user.correo,
+          foto_url: user.avatar
+        }
+      });
 
-      // Set source to display correct success message
       setSaveSource(result.isSimulated ? 'local' : 'backend');
       setSubmitted(true);
 
-      // Reset Form fields
+      // Limpiar formulario
       setTitle('');
       setCategory('Academico');
       setDescription('');
-      setAuthor('');
+      setFotoUrl('');
       setIsAnonymous(true);
 
-      // Auto-hide success alert
       setTimeout(() => {
         setSubmitted(false);
       }, 6000);
@@ -83,7 +84,7 @@ export default function SuggestionForm() {
   return (
     <div className="container">
       <div className="page-header" style={{ textAlign: 'center' }}>
-        <h1 className="page-title">Nueva Sugerencia</h1>
+        <h1 className="page-title">✍️ Nueva Sugerencia</h1>
         <p className="page-subtitle">
           Envía tus comentarios o propuestas para ayudarnos a mejorar cada día.
         </p>
@@ -95,8 +96,8 @@ export default function SuggestionForm() {
             <span>✅</span>
             <span>
               {saveSource === 'backend' 
-                ? '¡Tu sugerencia ha sido enviada con éxito al backend y guardada en Supabase!' 
-                : '¡Sugerencia guardada con éxito (Simulador local activo)! Será visible en el tablero.'}
+                ? '¡Tu sugerencia ha sido enviada con éxito al servidor y guardada en Supabase!' 
+                : '¡Sugerencia guardada con éxito (Modo local sincronizado)! Ya es visible en el tablero.'}
             </span>
           </div>
         )}
@@ -114,13 +115,13 @@ export default function SuggestionForm() {
             <input
               type="text"
               id="title"
-              placeholder="Ej. Mejorar el equipamiento del laboratorio de física"
+              placeholder="Ej. Mejorar la red Wi-Fi en laboratorios de cómputo"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
               disabled={loading}
             />
-            <p className="form-help">Escribe un título corto y claro que describa tu propuesta.</p>
+            <p className="form-help">Escribe un título corto y claro que resuma tu idea.</p>
           </div>
 
           <div className="form-group">
@@ -152,7 +153,20 @@ export default function SuggestionForm() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Identificación</label>
+            <label className="form-label" htmlFor="foto-url">Enlace a imagen o evidencia (Opcional)</label>
+            <input
+              type="url"
+              id="foto-url"
+              placeholder="https://ejemplo.com/foto.jpg"
+              value={fotoUrl}
+              onChange={(e) => setFotoUrl(e.target.value)}
+              disabled={loading}
+            />
+            <p className="form-help">Puedes pegar un enlace a una imagen de referencia.</p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Privacidad y Anonimato</label>
             <div className="radio-group">
               <label className="radio-option">
                 <input
@@ -162,7 +176,7 @@ export default function SuggestionForm() {
                   onChange={() => setIsAnonymous(true)}
                   disabled={loading}
                 />
-                Enviar como Anónimo (la administración conocerá tu autoría, pero el público no)
+                Enviar como <strong>Anónimo</strong> (Solo los administradores podrán ver tu autoría).
               </label>
               <label className="radio-option">
                 <input
@@ -171,27 +185,11 @@ export default function SuggestionForm() {
                   checked={!isAnonymous}
                   onChange={() => setIsAnonymous(false)}
                   disabled={loading}
-                  style={{ width: 'auto' }}
                 />
-                Incluir mi nombre
+                Público (mostrar mi nombre <strong>{user.nombre}</strong> en el tablero).
               </label>
             </div>
           </div>
-
-          {!isAnonymous && (
-            <div className="form-group animate-fadeIn" style={{ animation: 'fadeIn 0.2s ease-out' }}>
-              <label className="form-label" htmlFor="author">Nombre completo o curso</label>
-              <input
-                type="text"
-                id="author"
-                placeholder={`Ej. ${user.nombre}`}
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                required={!isAnonymous}
-                disabled={loading}
-              />
-            </div>
-          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem' }}>
             <button 
@@ -200,7 +198,7 @@ export default function SuggestionForm() {
               style={{ width: '100%' }}
               disabled={loading}
             >
-              {loading ? 'Validando...' : 'Enviar Sugerencia'}
+              {loading ? 'Validando y Enviando...' : 'Enviar Sugerencia al Buzón'}
             </button>
           </div>
         </form>

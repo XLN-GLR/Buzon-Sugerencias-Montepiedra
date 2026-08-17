@@ -22,8 +22,8 @@ app.get('/', (req, res) => {
 
 // Listado de palabras prohibidas para moderación de contenido (lenguaje inapropiado)
 const FORBIDDEN_WORDS = [
-  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón', 
-  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil', 
+  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón',
+  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil',
   'groseria', 'grosería', 'basura', 'hijo de puta', 'malparido', 'culiado'
 ];
 

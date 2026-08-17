@@ -5,11 +5,13 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Board from './pages/Board';
 import SuggestionForm from './pages/SuggestionForm';
+import MaintenanceBoard from './pages/MaintenanceBoard';
+import SecretariaPanel from './pages/SecretariaPanel';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 
-// Protected Route Component
+// Componente para proteger rutas privadas
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   if (!user) {
@@ -18,19 +20,26 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Role-based Route Protection
+// Protección por Roles Institucionales
 function RoleRoute({ allowedRoles, children }) {
   const { user } = useAuth();
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  if (!allowedRoles.includes(user.rol)) {
+  
+  const isAllowed = allowedRoles.some(r => 
+    r === user.rol || 
+    (r === 'administrador' && user.rol === 'admin') || 
+    (r === 'admin' && user.rol === 'administrador')
+  );
+
+  if (!isAllowed) {
     return <Navigate to="/" replace />;
   }
   return children;
 }
 
-// Guest-only Route (Redirect to home if logged in)
+// Ruta exclusiva para invitados (si ya está logueado, redirigir al tablero)
 function GuestRoute({ children }) {
   const { user } = useAuth();
   if (user) {
@@ -45,7 +54,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Guest-only routes */}
+            {/* Rutas públicas de acceso */}
             <Route 
               path="/login" 
               element={
@@ -55,7 +64,7 @@ export default function App() {
               } 
             />
 
-            {/* Authenticated routes inside Layout */}
+            {/* Rutas autenticadas dentro del Layout principal */}
             <Route 
               path="/" 
               element={
@@ -64,34 +73,54 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Main Suggestions Board */}
+              {/* 1. Tablero Público de Sugerencias (Todos los roles) */}
               <Route index element={<Board />} />
               
-              {/* Form to submit new suggestions (Only Alumnos & Admins) */}
+              {/* 2. Formulario para enviar propuestas */}
               <Route 
                 path="nueva-sugerencia" 
                 element={
-                  <RoleRoute allowedRoles={['alumno', 'administrador']}>
+                  <RoleRoute allowedRoles={['alumno', 'profesor', 'administrador', 'admin']}>
                     <SuggestionForm />
                   </RoleRoute>
                 } 
               />
+
+              {/* 3. Tablón de Tareas de Mantenimiento (Mantenimiento y Administrador) */}
+              <Route 
+                path="mantenimiento" 
+                element={
+                  <RoleRoute allowedRoles={['mantenimiento', 'administrador', 'admin']}>
+                    <MaintenanceBoard />
+                  </RoleRoute>
+                } 
+              />
+
+              {/* 4. Panel de Nóminas de Secretaría (Secretaría y Administrador) */}
+              <Route 
+                path="secretaria" 
+                element={
+                  <RoleRoute allowedRoles={['secretaria', 'administrador', 'admin']}>
+                    <SecretariaPanel />
+                  </RoleRoute>
+                } 
+              />
               
-              {/* Administration/Management Dashboard (Only Profesor & Administrador) */}
+              {/* 5. Panel de Moderación y Respuestas Oficiales (Profesor y Administrador) */}
               <Route 
                 path="admin" 
                 element={
-                  <RoleRoute allowedRoles={['profesor', 'administrador']}>
+                  <RoleRoute allowedRoles={['profesor', 'administrador', 'admin']}>
                     <Dashboard />
                   </RoleRoute>
                 } 
               />
 
-              {/* User Profile Page (All Roles) */}
+              {/* 6. Perfil de Usuario (Todos los roles) */}
               <Route path="perfil" element={<Profile />} />
             </Route>
 
-            {/* Catch-all redirect to home */}
+            {/* Redirección por defecto */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

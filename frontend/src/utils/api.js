@@ -1,200 +1,403 @@
 // frontend/src/utils/api.js
+// Cliente HTTP adaptado al contrato de datos de 10 columnas y headers de rol
 
 const API_BASE_URL = 'http://127.0.0.1:8080';
 
-// Seed data with metadata encoded in the description
+// Datos semilla de fallback con el nuevo formato del contrato (10 columnas + usuarios)
 const SEED_SUGGESTIONS = [
   {
     id: 'sug-1',
     created_at: '2026-06-28T14:30:00.000Z',
     titulo: 'Áreas verdes en el patio central',
     categoria: 'Infraestructura',
-    descripcion: 'Sería excelente colocar más plantas ornamentales y césped en las zonas de descanso. Ayudaría a tener un ambiente más fresco y agradable durante el recreo.\n[author:Juan Pérez (10mo de Básica)][anon:false]',
-    estado: 'Respondido',
-    respuesta: '¡Excelente sugerencia! El departamento administrativo ha aprobado un proyecto de jardinería para el patio central. Los trabajos comenzarán la próxima semana.',
-    usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22'
+    descripcion: 'Sería excelente colocar más plantas ornamentales y césped en las zonas de descanso. Ayudaría a tener un ambiente más fresco y agradable durante el recreo.',
+    estado: 'Realizada',
+    es_anonimo: false,
+    votos: 18,
+    respuesta_moderador: 'El departamento de mantenimiento completó la instalación de jardineras y nuevo césped.',
+    foto_url: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86',
+    usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
+    usuarios: {
+      id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
+      nombre: 'Daniel Mendoza',
+      correo: 'daniel@alumno.montepiedra.edu.ec',
+      foto_url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Daniel'
+    }
   },
   {
     id: 'sug-2',
     created_at: '2026-07-01T09:15:00.000Z',
-    titulo: 'Actualización de libros en la Biblioteca',
-    categoria: 'Academico',
-    descripcion: 'Solicito que se adquieran más novelas juveniles y libros actualizados de programación para la biblioteca general. Muchos compañeros están interesados en estos temas.\n[author:Pedro Gómez (8vo de Básica)][anon:true]',
-    estado: 'En proceso',
-    respuesta: '',
-    usuario_id: '71796f2a-4e52-53d3-c0b7-e82840967c33'
+    titulo: 'Reparación de luminarias en el Bloque B',
+    categoria: 'Infraestructura',
+    descripcion: 'Dos lámparas del pasillo del segundo piso del Bloque B parpadean constantemente y dificultan la visión en las noches.',
+    estado: 'En Proceso',
+    es_anonimo: true,
+    votos: 8,
+    respuesta_moderador: 'Asignado al equipo de Mantenimiento para reemplazo de balastros y tubos LED.',
+    foto_url: null,
+    usuario_id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
+    usuarios: {
+      id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
+      nombre: 'Juan Pérez',
+      correo: 'juan.perez@alumno.montepiedra.edu.ec',
+      foto_url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan'
+    }
   },
   {
     id: 'sug-3',
     created_at: '2026-06-25T11:00:00.000Z',
     titulo: 'Talleres extracurriculares de Robótica',
     categoria: 'Academico',
-    descripcion: 'Me gustaría que se abran clubes o talleres de robótica y electrónica los días sábados, para fomentar las habilidades tecnológicas en los estudiantes.\n[author:Andrés Silva (1ro de Bachillerato)][anon:true]',
-    estado: 'Respondido',
-    respuesta: 'Agradecemos tu iniciativa. A partir del próximo quimestre, implementaremos el taller de robótica los días viernes por la tarde en el laboratorio de computación.',
-    usuario_id: '82807g3b-5f63-64e4-d1c8-f93951078d44'
+    descripcion: 'Me gustaría que se abran clubes o talleres de robótica y electrónica los días sábados, para fomentar las habilidades tecnológicas en los estudiantes.',
+    estado: 'Aprobada',
+    es_anonimo: true,
+    votos: 14,
+    respuesta_moderador: 'Agradecemos tu iniciativa. A partir del próximo mes, implementaremos el taller de robótica los viernes por la tarde.',
+    foto_url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e',
+    usuario_id: '82807g3b-5f63-64e4-d1c8-f93951078d44',
+    usuarios: {
+      id: '82807g3b-5f63-64e4-d1c8-f93951078d44',
+      nombre: 'Pedro Gómez',
+      correo: 'pedro.gomez@alumno.montepiedra.edu.ec',
+      foto_url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Pedro'
+    }
   },
   {
     id: 'sug-4',
     created_at: '2026-07-02T16:45:00.000Z',
-    titulo: 'Implementación de más basureros de reciclaje',
-    categoria: 'Convivencia',
-    descripcion: 'Deberíamos colocar contenedores diferenciados para plástico, papel y orgánicos cerca del bar escolar. Esto nos ayudará a mantener limpio el colegio y cuidar el planeta.\n[author:Comité de Estudiantes][anon:false]',
+    titulo: 'Mantenimiento y pintura de canchas deportivas',
+    categoria: 'Infraestructura',
+    descripcion: 'Las líneas de la cancha de básquetbol y vóley están desgastadas y los tableros requieren pintura anticorrosiva.',
+    estado: 'Aprobada',
+    es_anonimo: false,
+    votos: 6,
+    respuesta_moderador: 'Aprobada para ejecución por el personal de Mantenimiento durante el receso escolar.',
+    foto_url: null,
+    usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
+    usuarios: {
+      id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
+      nombre: 'Daniel Mendoza',
+      correo: 'daniel@alumno.montepiedra.edu.ec',
+      foto_url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Daniel'
+    }
+  },
+  {
+    id: 'sug-5',
+    created_at: '2026-07-05T10:20:00.000Z',
+    titulo: 'Ampliación del horario de la Biblioteca Virtual',
+    categoria: 'Academico',
+    descripcion: 'Solicitamos extender el acceso a la sala de computadoras hasta las 18:00 para realizar tareas e investigaciones grupales.',
     estado: 'Pendiente',
-    respuesta: '',
-    usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22'
+    es_anonimo: true,
+    votos: 2,
+    respuesta_moderador: null,
+    foto_url: null,
+    usuario_id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
+    usuarios: {
+      id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
+      nombre: 'Juan Pérez',
+      correo: 'juan.perez@alumno.montepiedra.edu.ec',
+      foto_url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan'
+    }
   }
 ];
 
-const INITIAL_VOTES = {
-  'sug-1': 15,
-  'sug-2': 4,
-  'sug-3': 12,
-  'sug-4': 1
-};
-
-// Initialize localStorage if not present
+// Inicializar almacenamiento local si no existe
 function initLocalStorage() {
   if (!localStorage.getItem('montepiedra_sugerencias')) {
     localStorage.setItem('montepiedra_sugerencias', JSON.stringify(SEED_SUGGESTIONS));
   }
-  if (!localStorage.getItem('montepiedra_votos')) {
-    localStorage.setItem('montepiedra_votos', JSON.stringify(INITIAL_VOTES));
+  if (!localStorage.getItem('montepiedra_user_votes')) {
+    localStorage.setItem('montepiedra_user_votes', JSON.stringify({}));
   }
 }
 
 initLocalStorage();
 
-// Parse description metadata
-export function parseDescription(desc) {
-  if (!desc) return { cleanDesc: '', author: 'Anónimo', isAnonymous: true };
-  
-  // Regex matches \n[author:xxx][anon:yyy] at the end of string
-  const match = desc.match(/\n\[author:(.*?)\]\[anon:(true|false)\]$/);
-  if (match) {
-    const authorVal = match[1];
-    const anonVal = match[2] === 'true';
-    const cleanDesc = desc.replace(/\n\[author:(.*?)\]\[anon:(true|false)\]$/, '');
-    return { cleanDesc, author: authorVal, isAnonymous: anonVal };
-  }
-  
-  return { cleanDesc: desc, author: 'Anónimo', isAnonymous: true };
-}
+// Helper para anonimizar datos localmente si el backend está desconectado
+function formatSuggestionsByRole(suggestions, userRole) {
+  const normalizedRole = (userRole || 'alumno').toLowerCase();
 
-// Format description with metadata
-export function encodeDescription(cleanDesc, author, isAnonymous) {
-  return `${cleanDesc}\n[author:${author}][anon:${isAnonymous}]`;
-}
+  return suggestions.map(item => {
+    // Si la sugerencia ya viene procesada con objeto usuarios
+    let userInfo = item.usuarios || {
+      id: item.usuario_id || null,
+      nombre: 'Comunidad Montepiedra',
+      correo: 'contacto@montepiedra.edu.ec',
+      foto_url: null
+    };
 
-// Helper to inject votes and user avatar into suggestions
-function mergeLocalVotesAndAvatars(suggestionsList) {
-  const votesMap = JSON.parse(localStorage.getItem('montepiedra_votos') || '{}');
-  const userProfiles = JSON.parse(localStorage.getItem('montepiedra_user_profiles') || '[]');
-
-  return suggestionsList.map(item => {
-    // Inject votes count (fallback to 0)
-    const votes = votesMap[item.id] || votesMap[item.created_at] || 0;
-    
-    // Find author details to display their latest profile picture in the cards
-    const { cleanDesc, author: originalAuthor } = parseDescription(item.descripcion);
-    const matchedProfile = userProfiles.find(p => p.nombre.toLowerCase() === originalAuthor.toLowerCase());
-    const authorAvatar = matchedProfile ? matchedProfile.avatar : null;
+    if (item.es_anonimo && normalizedRole !== 'admin' && normalizedRole !== 'administrador') {
+      userInfo = {
+        id: null,
+        nombre: 'Anónimo',
+        correo: 'anonimo@montepiedra.edu.ec',
+        foto_url: null
+      };
+    }
 
     return {
       ...item,
-      votos: votes,
-      authorAvatar: authorAvatar
+      votos: item.votos !== undefined ? item.votos : 0,
+      estado: item.estado || 'Pendiente',
+      respuesta_moderador: item.respuesta_moderador || item.respuesta || null,
+      usuarios: userInfo
     };
   });
 }
 
+// Mapeador de roles compatibles con backend
+export function normalizeRoleForHeader(role) {
+  if (!role) return 'alumno';
+  const lower = role.toLowerCase();
+  if (lower === 'administrador' || lower === 'admin') return 'admin';
+  if (lower === 'profesor' || lower === 'docente') return 'profesor';
+  if (lower === 'mantenimiento') return 'profesor'; // Mantenimiento tiene permisos operativos
+  if (lower === 'secretaria' || lower === 'secretaría') return 'admin'; // Secretaría tiene permisos de gestión
+  return 'alumno';
+}
+
 export const api = {
-  // Fetch all suggestions
-  async getSuggestions() {
+  // 1. Obtener todas las sugerencias con envío de header 'x-user-role'
+  async getSuggestions(userRole = 'alumno') {
+    const headerRole = normalizeRoleForHeader(userRole);
     try {
-      const response = await fetch(`${API_BASE_URL}/sugerencias`);
+      const response = await fetch(`${API_BASE_URL}/sugerencias`, {
+        method: 'GET',
+        headers: {
+          'x-user-role': headerRole
+        }
+      });
+
       if (!response.ok) {
         throw new Error(`Error en servidor: ${response.status}`);
       }
+
       const result = await response.json();
-      
+
       if (result.data) {
-        // Cache backend data
+        // Almacenar caché local
         localStorage.setItem('montepiedra_sugerencias', JSON.stringify(result.data));
-        const merged = mergeLocalVotesAndAvatars(result.data);
-        return { data: merged, source: 'backend' };
+        return { data: result.data, source: 'backend' };
       }
-      throw new Error("Formato de respuesta incorrecto");
+      throw new Error('Formato de respuesta incorrecto');
     } catch (error) {
-      console.warn("Backend desconectado o error. Usando fallback de localStorage:", error.message);
+      console.warn('Backend desconectado o error. Usando fallback local:', error.message);
       const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
-      const merged = mergeLocalVotesAndAvatars(localData);
-      return { data: merged, source: 'local' };
+      const formatted = formatSuggestionsByRole(localData, userRole);
+      return { data: formatted, source: 'local' };
     }
   },
 
-  // Create a suggestion
-  async createSuggestion(title, description, category, userId) {
+  // 2. Crear una nueva sugerencia con envío de header 'x-user-role'
+  async createSuggestion({ titulo, descripcion, categoria, usuario_id, es_anonimo = true, foto_url = null, userRole = 'alumno', authorProfile = null }) {
+    const headerRole = normalizeRoleForHeader(userRole);
     const payload = {
-      titulo: title,
-      descripcion: description,
-      categoria: category,
-      usuario_id: userId
+      titulo,
+      descripcion,
+      categoria,
+      usuario_id,
+      es_anonimo: Boolean(es_anonimo),
+      votos: 0,
+      respuesta_moderador: null,
+      foto_url: foto_url || null
     };
 
     try {
       const response = await fetch(`${API_BASE_URL}/sugerencias`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        throw new Error(`Error en backend: ${response.status}`);
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || `Error ${response.status}`);
       }
+
       const result = await response.json();
-      
-      // Update local suggestions cache
+
+      // Guardar en caché local
       const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
-      localData.unshift(result.data);
+      const newSug = {
+        ...result.data,
+        usuarios: authorProfile || {
+          id: usuario_id,
+          nombre: 'Estudiante',
+          correo: 'alumno@montepiedra.edu.ec',
+          foto_url: null
+        }
+      };
+      localData.unshift(newSug);
       localStorage.setItem('montepiedra_sugerencias', JSON.stringify(localData));
 
-      // Inject vote values into result
-      const merged = mergeLocalVotesAndAvatars([result.data]);
-
-      return { data: merged[0], source: 'backend' };
+      return { data: newSug, source: 'backend' };
     } catch (error) {
-      console.warn("Error al enviar al backend. Guardando localmente:", error.message);
-      
+      console.warn('Error al guardar en backend. Guardando localmente:', error.message);
+
+      // Manejar error de lenguaje inapropiado específicamente
+      if (error.message && error.message.includes('inapropiado')) {
+        throw error;
+      }
+
       const simulatedData = {
-        id: `local-${Date.now()}`,
+        id: `sug-${Date.now()}`,
         created_at: new Date().toISOString(),
-        titulo: title,
-        descripcion: description,
-        categoria: category,
-        estado: 'pendiente',
-        respuesta: '',
-        usuario_id: userId
+        titulo,
+        descripcion,
+        categoria,
+        estado: 'Pendiente',
+        es_anonimo: Boolean(es_anonimo),
+        votos: 0,
+        respuesta_moderador: null,
+        foto_url: foto_url || null,
+        usuario_id,
+        usuarios: es_anonimo && headerRole !== 'admin'
+          ? { id: null, nombre: 'Anónimo', correo: 'anonimo@montepiedra.edu.ec', foto_url: null }
+          : (authorProfile || { id: usuario_id, nombre: 'Estudiante', correo: 'alumno@montepiedra.edu.ec', foto_url: null })
       };
 
       const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
       localData.unshift(simulatedData);
       localStorage.setItem('montepiedra_sugerencias', JSON.stringify(localData));
 
-      // Inject vote values into simulated result
-      const merged = mergeLocalVotesAndAvatars([simulatedData]);
-
-      return { data: merged[0], source: 'local', isSimulated: true };
+      return { data: simulatedData, source: 'local', isSimulated: true };
     }
   },
 
-  // Delete suggestion
-  async deleteSuggestion(id, userRole) {
+  // 3. Sistema de Votación (Like / Dislike limitado a 1 voto por usuario)
+  async voteSuggestion(id, voteType = 'like', userId = 'usr-default', userRole = 'alumno') {
+    const userVotes = JSON.parse(localStorage.getItem('montepiedra_user_votes') || '{}');
+    const userMap = userVotes[userId] || {};
+    const previousVote = userMap[id]; // 'like', 'dislike', or undefined
+
+    if (previousVote === voteType) {
+      return { success: false, message: 'Ya has emitido este voto en esta propuesta.' };
+    }
+
+    let voteDelta = 0;
+    if (!previousVote) {
+      voteDelta = voteType === 'like' ? 1 : -1;
+    } else if (previousVote === 'like' && voteType === 'dislike') {
+      voteDelta = -2;
+    } else if (previousVote === 'dislike' && voteType === 'like') {
+      voteDelta = 2;
+    }
+
+    // Registrar el voto del usuario
+    userMap[id] = voteType;
+    userVotes[userId] = userMap;
+    localStorage.setItem('montepiedra_user_votes', JSON.stringify(userVotes));
+
+    // Intentar llamada a backend si es like
+    try {
+      if (voteType === 'like' && !previousVote) {
+        await fetch(`${API_BASE_URL}/sugerencias/${id}/votar`, {
+          method: 'POST',
+          headers: {
+            'x-user-role': normalizeRoleForHeader(userRole)
+          }
+        });
+      }
+    } catch (e) {
+      console.info('Voto sincronizado localmente:', e.message);
+    }
+
+    // Actualizar conteo local
+    const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
+    let updatedVotes = 0;
+    const updated = localData.map(item => {
+      if (item.id === id) {
+        const current = item.votos || 0;
+        updatedVotes = Math.max(0, current + voteDelta);
+        return { ...item, votos: updatedVotes };
+      }
+      return item;
+    });
+    localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
+
+    return {
+      success: true,
+      id,
+      votos: updatedVotes,
+      currentVote: voteType
+    };
+  },
+
+  // Obtener voto registrado del usuario para una sugerencia
+  getUserVote(sugId, userId) {
+    if (!userId) return null;
+    const userVotes = JSON.parse(localStorage.getItem('montepiedra_user_votes') || '{}');
+    return userVotes[userId]?.[sugId] || null;
+  },
+
+  // 4. Moderar / Actualizar Estado y Respuesta de una Sugerencia
+  async updateSuggestionModeration(id, estado, respuesta_moderador, userRole = 'profesor') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    const payload = {
+      estado,
+      respuesta_moderador
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/sugerencias/${id}/moderacion`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Error ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Actualizar en caché local
+      const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
+      const updated = localData.map(item => {
+        if (item.id === id) {
+          return { ...item, estado, respuesta_moderador };
+        }
+        return item;
+      });
+      localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
+
+      return { data: result, source: 'backend' };
+    } catch (error) {
+      console.warn('Actualización de moderación falló en backend. Guardando localmente:', error.message);
+
+      const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
+      const updated = localData.map(item => {
+        if (item.id === id) {
+          return { ...item, estado, respuesta_moderador };
+        }
+        return item;
+      });
+      localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
+
+      return {
+        data: { id, estado, respuesta_moderador },
+        source: 'local',
+        isSimulated: true
+      };
+    }
+  },
+
+  // 5. Eliminar sugerencia
+  async deleteSuggestion(id, userRole = 'admin') {
+    const headerRole = normalizeRoleForHeader(userRole);
     try {
       const response = await fetch(`${API_BASE_URL}/sugerencias/${id}`, {
         method: 'DELETE',
         headers: {
-          'x-user-role': userRole
+          'x-user-role': headerRole
         }
       });
 
@@ -202,83 +405,20 @@ export const api = {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Error ${response.status}`);
       }
-      
+
       const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
       const filtered = localData.filter(item => item.id !== id);
       localStorage.setItem('montepiedra_sugerencias', JSON.stringify(filtered));
 
       return { success: true, source: 'backend' };
     } catch (error) {
-      console.warn("Error al borrar en el backend. Eliminando localmente:", error.message);
-      
+      console.warn('Error al borrar en el backend. Eliminando localmente:', error.message);
+
       const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
       const filtered = localData.filter(item => item.id !== id);
       localStorage.setItem('montepiedra_sugerencias', JSON.stringify(filtered));
-      
+
       return { success: true, source: 'local', error: error.message };
     }
-  },
-
-  // Update suggestion status and response
-  async updateSuggestionState(id, newStatus, responseText, userRole) {
-    const payload = {
-      estado: newStatus,
-      respuesta: responseText
-    };
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/sugerencias/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-role': userRole
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ruta de actualización no soportada en backend`);
-      }
-      
-      const result = await response.json();
-      
-      const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
-      const updated = localData.map(item => {
-        if (item.id === id) {
-          return { ...item, estado: newStatus, respuesta: responseText };
-        }
-        return item;
-      });
-      localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
-
-      const merged = mergeLocalVotesAndAvatars([result.data]);
-      return { data: merged[0], source: 'backend' };
-    } catch (error) {
-      console.info("Actualización de estado en backend falló. Guardando localmente (simulado):", error.message);
-      
-      const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
-      let updatedObj = null;
-      const updated = localData.map(item => {
-        if (item.id === id) {
-          updatedObj = { ...item, estado: newStatus, respuesta: responseText };
-          return updatedObj;
-        }
-        return item;
-      });
-      localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
-
-      const merged = mergeLocalVotesAndAvatars([updatedObj]);
-      return { data: merged[0], source: 'local', isSimulated: true };
-    }
-  },
-
-  // Vote for a suggestion (Likes system)
-  voteSuggestion(id) {
-    const votesMap = JSON.parse(localStorage.getItem('montepiedra_votos') || '{}');
-    const currentVotes = votesMap[id] || 0;
-    const newVotes = currentVotes + 1;
-    votesMap[id] = newVotes;
-    localStorage.setItem('montepiedra_votos', JSON.stringify(votesMap));
-    return newVotes;
   }
 };

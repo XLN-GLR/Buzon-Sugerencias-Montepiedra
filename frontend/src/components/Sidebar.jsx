@@ -24,9 +24,15 @@ export default function Sidebar() {
 
   if (!user) return null;
 
+  const isAdmin = user.rol === 'administrador' || user.rol === 'admin';
+  const isProfesor = user.rol === 'profesor';
+  const isAlumno = user.rol === 'alumno';
+  const isMantenimiento = user.rol === 'mantenimiento';
+  const isSecretaria = user.rol === 'secretaria';
+
   return (
     <>
-      {/* Mobile Top Navbar (only visible on mobile screens) */}
+      {/* Mobile Top Navbar (solo visible en pantallas móviles) */}
       <div className={styles.mobileHeader}>
         <div className={styles.mobileBrand}>
           <img src={logoImg} alt="Logo" className={styles.mobileLogo} />
@@ -49,13 +55,14 @@ export default function Sidebar() {
           <img src={logoImg} alt="Logo Montepiedra" className={styles.logo} />
           <div className={styles.brandText}>
             <span className={styles.title}>MONTEPIEDRA</span>
-            <span className={styles.subtitle}>Buzón de Sugerencias</span>
+            <span className={styles.subtitle}>Buzón Institucional</span>
           </div>
         </div>
 
         {/* Navigation Links */}
         <nav className={styles.nav}>
           <ul className={styles.navList}>
+            {/* 1. Tablero Público (Para todos los roles) */}
             <li>
               <NavLink 
                 to="/" 
@@ -67,8 +74,8 @@ export default function Sidebar() {
               </NavLink>
             </li>
 
-            {/* Alumno & Administrador can create suggestions */}
-            {(user.rol === 'alumno' || user.rol === 'administrador') && (
+            {/* 2. Enviar Sugerencia (Alumnos, Profesores y Administradores) */}
+            {(isAlumno || isProfesor || isAdmin) && (
               <li>
                 <NavLink 
                   to="/nueva-sugerencia" 
@@ -80,20 +87,46 @@ export default function Sidebar() {
               </li>
             )}
 
-            {/* Profesor & Administrador can access the management dashboard */}
-            {(user.rol === 'profesor' || user.rol === 'administrador') && (
+            {/* 3. Tablón de Mantenimiento (Rol Mantenimiento y Administradores) */}
+            {(isMantenimiento || isAdmin) && (
+              <li>
+                <NavLink 
+                  to="/mantenimiento" 
+                  className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
+                  onClick={closeSidebar}
+                >
+                  <span className={styles.linkIcon}>🔨</span> Tareas Mantenimiento
+                </NavLink>
+              </li>
+            )}
+
+            {/* 4. Panel de Nóminas (Rol Secretaría y Administradores) */}
+            {(isSecretaria || isAdmin) && (
+              <li>
+                <NavLink 
+                  to="/secretaria" 
+                  className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
+                  onClick={closeSidebar}
+                >
+                  <span className={styles.linkIcon}>📑</span> Gestión de Nóminas
+                </NavLink>
+              </li>
+            )}
+
+            {/* 5. Panel de Gestión y Moderación (Profesores y Administradores) */}
+            {(isProfesor || isAdmin) && (
               <li>
                 <NavLink 
                   to="/admin" 
                   className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
                   onClick={closeSidebar}
                 >
-                  <span className={styles.linkIcon}>⚙️</span> Panel de Gestión
+                  <span className={styles.linkIcon}>⚙️</span> Panel de Moderación
                 </NavLink>
               </li>
             )}
 
-            {/* All authenticated users have access to Profile */}
+            {/* 6. Perfil de Usuario (Para todos los roles) */}
             <li>
               <NavLink 
                 to="/perfil" 
@@ -106,7 +139,7 @@ export default function Sidebar() {
           </ul>
         </nav>
 
-        {/* Sidebar Footer (Logout only, theme toggle is in top Header) */}
+        {/* Sidebar Footer */}
         <div className={styles.footer}>
           <button className={styles.logoutBtn} onClick={handleLogout}>
             <span className={styles.logoutIcon}>🚪</span> Cerrar Sesión
@@ -114,7 +147,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Overlay to close sidebar on mobile when clicking outside */}
+      {/* Overlay móvil */}
       {isOpen && <div className={styles.overlay} onClick={closeSidebar} />}
     </>
   );
