@@ -9,18 +9,32 @@ const app = express();
 // Habilitar CORS para permitir peticiones desde el frontend
 app.use(cors());
 
-// Middleware para poder recibir JSON desde el frontend de tu amigo
+// Middleware para procesar cuerpos de solicitud en formato JSON
 app.use(express.json());
 
-// Inicializar Supabase
+// Inicializar cliente de Supabase
 const supabase = createClient(Config.SUPABASE_URL, Config.SUPABASE_KEY);
 
-// Ruta de prueba
+// Helper para normalizar roles de usuario recibidos en encabezados
+const normalizeRole = (role) => {
+  if (!role) return 'alumno';
+  const r = String(role).trim().toLowerCase();
+  if (r === 'admin' || r === 'administrador') return 'admin';
+  if (r === 'secretaria' || r === 'secretaría') return 'secretaria';
+  if (r === 'mantenimiento') return 'mantenimiento';
+  if (r === 'profesor' || r === 'docente') return 'profesor';
+  return 'alumno';
+};
+
+// Ruta de comprobación de estado
 app.get('/', (req, res) => {
-  res.json({ status: "Backend corriendo con Node.js", database: "Conectada a Supabase" });
+  res.json({
+    status: "Backend corriendo con Node.js y Express",
+    database: "Conectada exitosamente a Supabase"
+  });
 });
 
-// Listado de palabras prohibidas para moderación de contenido (lenguaje inapropiado)
+// Listado de palabras prohibidas para moderación de contenido (filtro de lenguaje inapropiado)
 const FORBIDDEN_WORDS = [
   'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón',
   'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil',
@@ -30,13 +44,17 @@ const FORBIDDEN_WORDS = [
 // Función para verificar si un texto contiene lenguaje inapropiado
 const hasProfanity = (text) => {
   if (!text) return false;
-  const lower = text.toLowerCase();
+  const lower = String(text).toLowerCase();
   return FORBIDDEN_WORDS.some(word => lower.includes(word));
 };
 
-// Ruta para crear una nueva sugerencia
+// =======================================================
+// MÓDULO 2: BUZÓN DE SUGERENCIAS Y VOTACIONES
+// =======================================================
+
+// 1. Ruta para crear una nueva sugerencia
 app.post('/sugerencias', async (req, res) => {
-  const { titulo, descripcion, categoria, usuario_id, es_anonimo, votos, respuesta_moderador, foto_url } = req.body;
+  const { titulo, descripcion, categoria, usuario_id, es_anonimo, respuesta_moderador, foto_url } = req.body;
 
   // Validación de campos requeridos
   if (!titulo || !descripcion || !categoria || !usuario_id) {
@@ -53,21 +71,21 @@ app.post('/sugerencias', async (req, res) => {
   }
 
   try {
-    // Inserción en la base de datos
+    // Inserción en la tabla sugerencias de Supabase con likes y dislikes en 0
     const { data, error } = await supabase
       .from('sugerencias')
       .insert([
         {
-          titulo,
-          descripcion,
-          categoria,
-          usuario_id,
+          titulo: String(titulo).trim(),
+          descripcion: String(descripcion).trim(),
+          categoria: String(categoria).trim(),
+          usuario_id: String(usuario_id).trim(),
           estado: 'pendiente',
-          es_anonimo: es_anonimo ?? false,
+          es_anonimo: Boolean(es_anonimo),
           likes: 0,
           dislikes: 0,
-          respuesta_moderador: respuesta_moderador ?? null,
-          foto_url: foto_url ?? null
+          respuesta_moderador: respuesta_moderador ? String(respuesta_moderador).trim() : null,
+          foto_url: foto_url ? String(foto_url).trim() : null
         }
       ])
       .select();
@@ -76,10 +94,14 @@ app.post('/sugerencias', async (req, res) => {
       throw error;
     }
 
-    // Respondemos con status 201 y el objeto creado
+    const createdRecord = data[0];
+
     return res.status(201).json({
       message: "Sugerencia creada exitosamente",
-      data: data[0]
+      data: {
+        ...createdRecord,
+        votos: createdRecord.likes ?? 0
+      }
     });
   } catch (error) {
     console.error("Error al insertar sugerencia en Supabase:", error);
@@ -90,10 +112,12 @@ app.post('/sugerencias', async (req, res) => {
   }
 });
 
-// Ruta para obtener todas las sugerencias, ordenadas por created_at (más recientes primero)
+// 2. Ruta para obtener todas las sugerencias con estado del voto del usuario activo
 app.get('/sugerencias', async (req, res) => {
-  const userRole = req.headers['x-user-role']; // Rol del usuario actual
-  const currentUserId = req.headers['x-user-id'] || req.query.usuario_id; // ID del usuario consultante
+  const rawRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(rawRole);
+  const rawUserId = req.headers['x-user-id'] || req.query.usuario_id;
+  const currentUserId = rawUserId && rawUserId !== 'undefined' && rawUserId !== 'null' ? String(rawUserId).trim() : null;
 
   try {
     const { data, error } = await supabase
@@ -105,15 +129,15 @@ app.get('/sugerencias', async (req, res) => {
       throw error;
     }
 
-    // Obtener mapa de votos del usuario actual si existe currentUserId
+    // Obtener mapa de votos del usuario actual si se proporcionó un ID de usuario válido
     let userVotesMap = {};
     if (currentUserId) {
-      const { data: votosUsuario } = await supabase
+      const { data: votosUsuario, error: votosError } = await supabase
         .from('votos_sugerencias')
         .select('sugerencia_id, tipo_voto')
-        .eq('usuario_id', String(currentUserId).trim());
-      
-      if (votosUsuario) {
+        .eq('usuario_id', currentUserId);
+
+      if (!votosError && votosUsuario) {
         votosUsuario.forEach(v => {
           userVotesMap[v.sugerencia_id] = v.tipo_voto;
         });
@@ -122,13 +146,12 @@ app.get('/sugerencias', async (req, res) => {
 
     // Aplicar regla de privacidad para sugerencias anónimas y estructurar el retorno exacto
     const processedData = data.map(sugerencia => {
-      // Manejar la relación usuarios que Supabase puede devolver como objeto o array de un elemento
       let usuarioInfo = sugerencia.usuarios;
       if (Array.isArray(usuarioInfo)) {
         usuarioInfo = usuarioInfo[0] || null;
       }
 
-      // Preparar objeto de usuarios por defecto (datos reales)
+      // Preparar objeto de autor real
       let usuarioFinal = {
         id: usuarioInfo ? usuarioInfo.id : null,
         nombre: usuarioInfo ? usuarioInfo.nombre : "Anónimo",
@@ -136,33 +159,33 @@ app.get('/sugerencias', async (req, res) => {
         foto_url: usuarioInfo ? usuarioInfo.foto_url : null
       };
 
-      // Si es anónimo y el consultor NO es admin, se anonimiza
-      if (sugerencia.es_anonimo) {
-        if (userRole !== 'admin') {
-          usuarioFinal = {
-            id: null,
-            nombre: "Anónimo",
-            correo: "anonimo@montepiedra.edu.ec",
-            foto_url: null
-          };
-        }
+      // Si es anónimo y el consultor NO es admin, se oculta la identidad
+      if (sugerencia.es_anonimo && userRole !== 'admin') {
+        usuarioFinal = {
+          id: null,
+          nombre: "Anónimo",
+          correo: "anonimo@montepiedra.edu.ec",
+          foto_url: null
+        };
       }
 
-      const calculatedVotos = sugerencia.likes ?? sugerencia.votos ?? 0;
+      const likesCount = sugerencia.likes ?? 0;
+      const dislikesCount = sugerencia.dislikes ?? 0;
 
-      // Estructura exacta de salida requerida por el contrato (columnas de sugerencia + objeto usuarios)
       return {
         id: sugerencia.id,
         created_at: sugerencia.created_at,
         titulo: sugerencia.titulo,
         descripcion: sugerencia.descripcion,
         categoria: sugerencia.categoria,
-        es_anonimo: sugerencia.es_anonimo ?? false,
-        votos: calculatedVotos,
-        likes: sugerencia.likes ?? 0,
-        dislikes: sugerencia.dislikes ?? 0,
+        es_anonimo: Boolean(sugerencia.es_anonimo),
+        votos: likesCount,
+        likes: likesCount,
+        dislikes: dislikesCount,
         estado: sugerencia.estado || 'pendiente',
         respuesta_moderador: sugerencia.respuesta_moderador || null,
+        foto_url: sugerencia.foto_url || null,
+        usuario_id: sugerencia.usuario_id,
         user_vote: userVotesMap[sugerencia.id] || null,
         usuarios: usuarioFinal
       };
@@ -181,12 +204,12 @@ app.get('/sugerencias', async (req, res) => {
   }
 });
 
-// Ruta para registrar / alternar un voto (Likes / Dislikes con Toggle de voto y desmarcado)
+// 3. Ruta para registrar / alternar un voto (Likes / Dislikes con Toggle y desmarcado)
 app.post('/sugerencias/:id/votar', async (req, res) => {
   const { id } = req.params;
   const { usuario_id, tipo_voto } = req.body;
 
-  // 1. Validación de campos obligatorios
+  // Validación de campos obligatorios
   if (!usuario_id || typeof usuario_id !== 'string' || !usuario_id.trim()) {
     return res.status(400).json({
       error: "El campo 'usuario_id' es obligatorio."
@@ -199,8 +222,10 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
     });
   }
 
+  const userIdClean = usuario_id.trim();
+
   try {
-    // 2. Verificar existencia de la sugerencia en Supabase
+    // 1. Verificar existencia de la sugerencia en Supabase
     const { data: sugerencia, error: fetchSugerenciaError } = await supabase
       .from('sugerencias')
       .select('id, likes, dislikes')
@@ -221,12 +246,12 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
       });
     }
 
-    // 3. Consultar si el usuario ya emitió un voto previo en esta sugerencia
+    // 2. Consultar si el usuario ya emitió un voto previo en esta sugerencia
     const { data: votoExistente, error: fetchVotoError } = await supabase
       .from('votos_sugerencias')
       .select('id, tipo_voto')
       .eq('sugerencia_id', id)
-      .eq('usuario_id', usuario_id.trim())
+      .eq('usuario_id', userIdClean)
       .maybeSingle();
 
     if (fetchVotoError) {
@@ -241,7 +266,7 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
     let currentDislikes = sugerencia.dislikes || 0;
     let nuevoTipoVoto = tipo_voto;
 
-    // CASO A: TOGGLE OFF (Quitar voto si hace clic en el mismo botón)
+    // CASO A: TOGGLE OFF (Quitar voto si hace clic en la misma opción)
     if (votoExistente && votoExistente.tipo_voto === tipo_voto) {
       await supabase
         .from('votos_sugerencias')
@@ -277,8 +302,8 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
         .insert([
           {
             sugerencia_id: id,
-            usuario_id: usuario_id.trim(),
-            tipo_voto: tipo_voto.trim()
+            usuario_id: userIdClean,
+            tipo_voto: tipo_voto
           }
         ]);
 
@@ -289,12 +314,12 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
       }
     }
 
-    // Actualizar contadores en la tabla sugerencias
+    // 3. Actualizar contadores 'likes' y 'dislikes' en la tabla sugerencias
     const { data: updatedData, error: updateError } = await supabase
       .from('sugerencias')
-      .update({ likes: currentLikes, dislikes: currentDislikes, votos: currentLikes })
+      .update({ likes: currentLikes, dislikes: currentDislikes })
       .eq('id', id)
-      .select('id, likes, dislikes, votos')
+      .select('id, likes, dislikes')
       .single();
 
     if (updateError) {
@@ -322,21 +347,21 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
   }
 });
 
-// Ruta para moderar una sugerencia (cambiar estado y agregar respuesta)
+// 4. Ruta para moderar una sugerencia (cambiar estado y agregar respuesta)
 app.patch('/sugerencias/:id/moderacion', async (req, res) => {
   const { id } = req.params;
-  const userRole = req.headers['x-user-role']; // Rol del usuario actual
+  const rawRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(rawRole);
   const { estado, respuesta_moderador } = req.body;
 
-  // 1. Lógica de control de acceso (Seguridad de roles)
-  if (userRole !== 'profesor' && userRole !== 'admin') {
+  // Lógica de control de acceso (Profesor, Admin o Mantenimiento)
+  if (userRole !== 'profesor' && userRole !== 'admin' && userRole !== 'mantenimiento') {
     return res.status(403).json({
       error: "Acceso denegado. No tienes permisos de moderación."
     });
   }
 
   try {
-    // 2. Consultar existencia del registro en Supabase
     const { data: sugerencia, error: fetchError } = await supabase
       .from('sugerencias')
       .select('id')
@@ -349,10 +374,13 @@ app.patch('/sugerencias/:id/moderacion', async (req, res) => {
       });
     }
 
-    // 3. Actualizar estado y respuesta_moderador
+    const updatePayload = {};
+    if (estado !== undefined) updatePayload.estado = estado;
+    if (respuesta_moderador !== undefined) updatePayload.respuesta_moderador = respuesta_moderador;
+
     const { data: updatedData, error: updateError } = await supabase
       .from('sugerencias')
-      .update({ estado, respuesta_moderador })
+      .update(updatePayload)
       .eq('id', id)
       .select('id, estado, respuesta_moderador')
       .single();
@@ -376,15 +404,55 @@ app.patch('/sugerencias/:id/moderacion', async (req, res) => {
   }
 });
 
+// 5. Ruta para eliminar una sugerencia por su ID (Admin o Mantenimiento para sus asignaciones)
+app.delete('/sugerencias/:id', async (req, res) => {
+  const { id } = req.params;
+  const userRole = normalizeRole(req.headers['x-user-role']);
+
+  if (userRole !== 'admin' && userRole !== 'mantenimiento') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren privilegios de administrador o mantenimiento."
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sugerencias')
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        error: "No se encontró ninguna sugerencia con el ID proporcionado."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Sugerencia eliminada exitosamente",
+      data: data[0]
+    });
+  } catch (error) {
+    console.error("Error al eliminar sugerencia en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al eliminar la sugerencia",
+      details: error.message
+    });
+  }
+});
+
 // =======================================================
 // MÓDULO 3: SECRETARÍA (GESTIÓN DE NÓMINAS Y USUARIOS)
 // =======================================================
 
 // 1. Ruta para registro masivo de usuarios (Nómina institucional)
 app.post('/usuarios/registro-masivo', async (req, res) => {
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Secretaría o Admin)
   if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
@@ -393,14 +461,12 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
 
   const { nomina } = req.body;
 
-  // Validación de estructura de nómina
   if (!nomina || !Array.isArray(nomina) || nomina.length === 0) {
     return res.status(400).json({
       error: "El campo 'nomina' es obligatorio y debe ser un arreglo con al menos un usuario."
     });
   }
 
-  // Validar campos obligatorios de cada usuario en la nómina
   for (let i = 0; i < nomina.length; i++) {
     const item = nomina[i];
     if (!item.cedula || !item.nombre || !item.correo) {
@@ -413,7 +479,6 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
   try {
     const saltRounds = 10;
 
-    // Procesar y encriptar la cédula de cada usuario para su contraseña por defecto
     const usuariosParaInsertar = await Promise.all(
       nomina.map(async (usuario) => {
         const hashedPassword = await bcrypt.hash(String(usuario.cedula).trim(), saltRounds);
@@ -421,7 +486,7 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
           cedula: String(usuario.cedula).trim(),
           nombre: String(usuario.nombre).trim(),
           correo: String(usuario.correo).trim(),
-          rol: usuario.rol ? String(usuario.rol).trim() : 'alumno',
+          rol: usuario.rol ? String(usuario.rol).trim().toLowerCase() : 'alumno',
           password: hashedPassword,
           es_primer_ingreso: true,
           foto_url: usuario.foto_url ? String(usuario.foto_url).trim() : null
@@ -429,11 +494,10 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
       })
     );
 
-    // Inserción masiva en Supabase
     const { data: usuariosInsertados, error: insertError } = await supabase
       .from('usuarios')
       .insert(usuariosParaInsertar)
-      .select('id, cedula, nombre, correo, rol, es_primer_ingreso');
+      .select('id, cedula, nombre, correo, rol, es_primer_ingreso, foto_url, created_at');
 
     if (insertError) {
       console.error("Error al registrar nómina masiva en Supabase:", insertError);
@@ -459,9 +523,8 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
 
 // 2. Ruta para registro individual manual de usuarios
 app.post('/usuarios', async (req, res) => {
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Secretaría o Admin)
   if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
@@ -470,7 +533,6 @@ app.post('/usuarios', async (req, res) => {
 
   const { cedula, nombre, correo, rol, foto_url } = req.body;
 
-  // Validación de campos requeridos
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
       error: "El campo 'cedula' es obligatorio."
@@ -490,11 +552,9 @@ app.post('/usuarios', async (req, res) => {
   }
 
   try {
-    // Encriptar la cédula como contraseña por defecto
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(cedula.trim(), saltRounds);
 
-    // Inserción en la base de datos de Supabase
     const { data: nuevoUsuario, error: insertError } = await supabase
       .from('usuarios')
       .insert([
@@ -502,13 +562,13 @@ app.post('/usuarios', async (req, res) => {
           cedula: cedula.trim(),
           nombre: nombre.trim(),
           correo: correo.trim(),
-          rol: rol ? String(rol).trim() : 'alumno',
+          rol: rol ? String(rol).trim().toLowerCase() : 'alumno',
           password: hashedPassword,
           es_primer_ingreso: true,
           foto_url: foto_url ? String(foto_url).trim() : null
         }
       ])
-      .select('id, cedula, nombre, correo, rol, es_primer_ingreso, foto_url')
+      .select('id, cedula, nombre, correo, rol, es_primer_ingreso, foto_url, created_at')
       .single();
 
     if (insertError) {
@@ -534,9 +594,8 @@ app.post('/usuarios', async (req, res) => {
 
 // 3. Ruta para obtener usuarios (con filtro opcional por query ?rol=valor)
 app.get('/usuarios', async (req, res) => {
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Secretaría o Admin)
   if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
@@ -548,11 +607,11 @@ app.get('/usuarios', async (req, res) => {
   try {
     let query = supabase
       .from('usuarios')
-      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso')
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
       .order('nombre', { ascending: true });
 
     if (rol && typeof rol === 'string' && rol.trim()) {
-      query = query.eq('rol', rol.trim());
+      query = query.eq('rol', rol.trim().toLowerCase());
     }
 
     const { data: usuarios, error: fetchError } = await query;
@@ -575,12 +634,128 @@ app.get('/usuarios', async (req, res) => {
   }
 });
 
-// 4. Ruta para eliminar un usuario por su ID
+// 4. Ruta para actualizar la foto de perfil de un estudiante o usuario
+app.put('/usuarios/:id/foto', async (req, res) => {
+  const { id } = req.params;
+  const userRole = normalizeRole(req.headers['x-user-role']);
+  const requesterId = req.headers['x-user-id'];
+  const { foto_url } = req.body;
+
+  // Permiso: administración, secretaría o el propio usuario autenticado
+  const isAuthorized = 
+    userRole === 'secretaria' || 
+    userRole === 'admin' || 
+    (requesterId && String(requesterId).trim() === String(id).trim());
+
+  if (!isAuthorized) {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador para modificar este usuario."
+    });
+  }
+
+  try {
+    const { data: usuario, error: fetchError } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !usuario) {
+      return res.status(404).json({
+        error: "El usuario especificado no existe."
+      });
+    }
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('usuarios')
+      .update({ foto_url: foto_url || null })
+      .eq('id', id)
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Foto de perfil actualizada exitosamente",
+      id: updatedUser.id,
+      foto_url: updatedUser.foto_url,
+      usuario: updatedUser
+    });
+  } catch (error) {
+    console.error("Error al actualizar foto de perfil en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al actualizar la foto de perfil",
+      details: error.message
+    });
+  }
+});
+
+// 5. Ruta para actualizar la información completa de un usuario
+app.put('/usuarios/:id', async (req, res) => {
+  const { id } = req.params;
+  const userRole = normalizeRole(req.headers['x-user-role']);
+  const requesterId = req.headers['x-user-id'];
+  const { nombre, cedula, correo, rol, foto_url, password } = req.body;
+
+  const isSelf = requesterId && String(requesterId).trim() === String(id).trim();
+  const isAdminOrSecretaria = userRole === 'secretaria' || userRole === 'admin';
+
+  if (!isAdminOrSecretaria && !isSelf) {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+    });
+  }
+
+  try {
+    const updatePayload = {};
+    if (nombre !== undefined) updatePayload.nombre = String(nombre).trim();
+    if (correo !== undefined) updatePayload.correo = String(correo).trim();
+    if (foto_url !== undefined) updatePayload.foto_url = foto_url;
+    
+    // Modificaciones administrativas restringidas
+    if (isAdminOrSecretaria) {
+      if (cedula !== undefined) updatePayload.cedula = String(cedula).trim();
+      if (rol !== undefined) updatePayload.rol = String(rol).trim().toLowerCase();
+    }
+
+    // Si se pasa contraseña nueva, se cifra
+    if (password !== undefined && String(password).trim()) {
+      const saltRounds = 10;
+      updatePayload.password = await bcrypt.hash(String(password).trim(), saltRounds);
+      updatePayload.es_primer_ingreso = false;
+    }
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('usuarios')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Usuario actualizado exitosamente",
+      usuario: updatedUser
+    });
+  } catch (error) {
+    console.error("Error al actualizar usuario en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al actualizar el usuario",
+      details: error.message
+    });
+  }
+});
+
+// 6. Ruta para eliminar un usuario por su ID
 app.delete('/usuarios/:id', async (req, res) => {
   const { id } = req.params;
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Secretaría o Admin)
   if (userRole !== 'secretaria' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
@@ -621,156 +796,14 @@ app.delete('/usuarios/:id', async (req, res) => {
   }
 });
 
-// Ruta para actualizar la foto de perfil de un estudiante o usuario
-app.put('/usuarios/:id/foto', async (req, res) => {
-  const { id } = req.params;
-  const userRole = req.headers['x-user-role'];
-  const requesterId = req.headers['x-user-id'];
-  const { foto_url } = req.body;
-
-  // Permiso: administración, secretaría o el propio usuario actualizando su foto
-  if (userRole !== 'secretaria' && userRole !== 'admin' && userRole !== 'administrador' && String(requesterId) !== String(id)) {
-    return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de secretaría o administrador para cambiar la foto de otro usuario."
-    });
-  }
-
-  try {
-    // 1. Consultar si el usuario existe
-    const { data: usuario, error: fetchError } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (fetchError || !usuario) {
-      return res.status(404).json({
-        error: "El usuario especificado no existe."
-      });
-    }
-
-    // 2. Actualizar foto_url
-    const { data: updatedUser, error: updateError } = await supabase
-      .from('usuarios')
-      .update({ foto_url })
-      .eq('id', id)
-      .select('id, foto_url')
-      .single();
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    return res.status(200).json({
-      message: "Foto de perfil actualizada exitosamente",
-      id: updatedUser.id,
-      foto_url: updatedUser.foto_url
-    });
-  } catch (error) {
-    console.error("Error al actualizar foto de perfil en Supabase:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor al actualizar la foto de perfil",
-      details: error.message
-    });
-  }
-});
-
-// Ruta para actualizar la información de un usuario (Nombre, Cédula, Correo, Rol, Foto)
-app.put('/usuarios/:id', async (req, res) => {
-  const { id } = req.params;
-  const userRole = req.headers['x-user-role'];
-  const { nombre, cedula, correo, rol, foto_url } = req.body;
-
-  if (userRole !== 'secretaria' && userRole !== 'admin' && userRole !== 'administrador') {
-    return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
-    });
-  }
-
-  try {
-    const updatePayload = {};
-    if (nombre) updatePayload.nombre = String(nombre).trim();
-    if (cedula) updatePayload.cedula = String(cedula).trim();
-    if (correo) updatePayload.correo = String(correo).trim();
-    if (rol) updatePayload.rol = String(rol).trim().toLowerCase();
-    if (foto_url !== undefined) updatePayload.foto_url = foto_url;
-
-    const { data: updatedUser, error: updateError } = await supabase
-      .from('usuarios')
-      .update(updatePayload)
-      .eq('id', id)
-      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso')
-      .single();
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    return res.status(200).json({
-      message: "Usuario actualizado exitosamente",
-      usuario: updatedUser
-    });
-  } catch (error) {
-    console.error("Error al actualizar usuario en Supabase:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor al actualizar el usuario",
-      details: error.message
-    });
-  }
-});
-
-// Ruta para eliminar una sugerencia por su ID (reservado para el rol de administrador)
-app.delete('/sugerencias/:id', async (req, res) => {
-  const { id } = req.params;
-  const userRole = req.headers['x-user-role']; // Simulación temporal de rol hasta implementar Auth
-
-  // Validación de rol administrador
-  if (userRole !== 'admin') {
-    return res.status(403).json({
-      error: "Acceso denegado. Se requieren privilegios de administrador."
-    });
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('sugerencias')
-      .delete()
-      .eq('id', id)
-      .select();
-
-    if (error) {
-      throw error;
-    }
-
-    // Si data viene vacío, significa que no existía registro con ese ID
-    if (!data || data.length === 0) {
-      return res.status(404).json({
-        error: "No se encontró ninguna sugerencia con el ID proporcionado"
-      });
-    }
-
-    return res.status(200).json({
-      message: "Sugerencia eliminada exitosamente",
-      data: data[0]
-    });
-  } catch (error) {
-    console.error("Error al eliminar sugerencia en Supabase:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor al eliminar la sugerencia",
-      details: error.message
-    });
-  }
-});
-
 // =======================================================
 // MÓDULO 1: AUTENTICACIÓN Y PRIMER INGRESO
 // =======================================================
 
-// Ruta para inicio de sesión (Login de usuarios)
+// 1. Ruta para inicio de sesión (Login de usuarios)
 app.post('/auth/login', async (req, res) => {
   const { cedula, password } = req.body;
 
-  // 1. Validación de campos obligatorios iniciales
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
       error: "El campo 'cedula' es obligatorio."
@@ -778,7 +811,6 @@ app.post('/auth/login', async (req, res) => {
   }
 
   try {
-    // 2. Buscar al usuario por cédula en Supabase
     const { data: usuario, error: fetchError } = await supabase
       .from('usuarios')
       .select('id, cedula, nombre, correo, rol, foto_url, password, es_primer_ingreso')
@@ -793,14 +825,13 @@ app.post('/auth/login', async (req, res) => {
       });
     }
 
-    // 3. Validar existencia del usuario
     if (!usuario) {
       return res.status(404).json({
         error: "Usuario no encontrado. Verifique la cédula ingresada."
       });
     }
 
-    // 4. Caso Primer Ingreso: retornar requiere_configuracion y datos de usuario
+    // Caso Primer Ingreso: requerir configuración de contraseña
     if (usuario.es_primer_ingreso) {
       return res.status(200).json({
         message: "Primer ingreso detectado. Se requiere configurar la contraseña.",
@@ -816,7 +847,7 @@ app.post('/auth/login', async (req, res) => {
       });
     }
 
-    // 5. Caso Ingreso Regular: validar contraseña con hash en BD mediante bcrypt
+    // Caso Ingreso Regular: validar contraseña con hash en BD
     if (!password || typeof password !== 'string' || !password.trim()) {
       return res.status(400).json({
         error: "El campo 'password' es obligatorio para el inicio de sesión regular."
@@ -825,7 +856,7 @@ app.post('/auth/login', async (req, res) => {
 
     if (!usuario.password) {
       return res.status(401).json({
-        error: "El usuario no tiene una contraseña configurada en el sistema. Por favor, comuníquese con el administrador."
+        error: "El usuario no tiene una contraseña configurada. Comuníquese con la administración."
       });
     }
 
@@ -858,18 +889,16 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// Ruta para configurar la contraseña en el primer ingreso
+// 2. Ruta para configurar la contraseña en el primer ingreso
 app.post('/auth/primer-ingreso', async (req, res) => {
   const { cedula, nueva_password, conservar_cedula } = req.body;
 
-  // 1. Validación de cédula
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
       error: "El campo 'cedula' es obligatorio."
     });
   }
 
-  // 2. Validación de contraseña requerida si no se desea conservar la cédula
   const conservarCedulaComoPassword = Boolean(conservar_cedula);
   if (!conservarCedulaComoPassword && (!nueva_password || typeof nueva_password !== 'string' || !nueva_password.trim())) {
     return res.status(400).json({
@@ -878,7 +907,6 @@ app.post('/auth/primer-ingreso', async (req, res) => {
   }
 
   try {
-    // 3. Verificar que el usuario exista en Supabase
     const { data: usuario, error: fetchError } = await supabase
       .from('usuarios')
       .select('id, cedula, es_primer_ingreso')
@@ -899,12 +927,10 @@ app.post('/auth/primer-ingreso', async (req, res) => {
       });
     }
 
-    // 4. Determinar la contraseña a encriptar y generar el hash con bcrypt (10 rounds)
     const passwordAEncriptar = conservarCedulaComoPassword ? cedula.trim() : nueva_password.trim();
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(passwordAEncriptar, saltRounds);
 
-    // 5. Actualizar la contraseña en Supabase y cambiar es_primer_ingreso a false
     const { data: updatedData, error: updateError } = await supabase
       .from('usuarios')
       .update({
@@ -912,7 +938,7 @@ app.post('/auth/primer-ingreso', async (req, res) => {
         es_primer_ingreso: false
       })
       .eq('id', usuario.id)
-      .select('id, cedula, nombre, correo, rol')
+      .select('id, cedula, nombre, correo, rol, foto_url, created_at')
       .single();
 
     if (updateError) {
@@ -925,13 +951,7 @@ app.post('/auth/primer-ingreso', async (req, res) => {
 
     return res.status(200).json({
       message: "Contraseña configurada exitosamente. Ya puede iniciar sesión.",
-      usuario: {
-        id: updatedData.id,
-        cedula: updatedData.cedula,
-        nombre: updatedData.nombre,
-        correo: updatedData.correo,
-        rol: updatedData.rol
-      }
+      usuario: updatedData
     });
   } catch (error) {
     console.error("Error inesperado en /auth/primer-ingreso:", error);
@@ -948,9 +968,8 @@ app.post('/auth/primer-ingreso', async (req, res) => {
 
 // 1. Ruta para obtener sugerencias asignadas a mantenimiento (Aprobadas e Infraestructura)
 app.get('/sugerencias/mantenimiento', async (req, res) => {
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Mantenimiento o Admin)
   if (userRole !== 'mantenimiento' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
@@ -979,18 +998,23 @@ app.get('/sugerencias/mantenimiento', async (req, res) => {
         usuarioInfo = usuarioInfo[0] || null;
       }
 
+      const likesCount = sugerencia.likes ?? 0;
+      const dislikesCount = sugerencia.dislikes ?? 0;
+
       return {
         id: sugerencia.id,
         created_at: sugerencia.created_at,
         titulo: sugerencia.titulo,
         descripcion: sugerencia.descripcion,
         categoria: sugerencia.categoria,
-        es_anonimo: sugerencia.es_anonimo ?? false,
-        votos: sugerencia.votos ?? 0,
-        likes: sugerencia.likes ?? 0,
-        dislikes: sugerencia.dislikes ?? 0,
+        es_anonimo: Boolean(sugerencia.es_anonimo),
+        votos: likesCount,
+        likes: likesCount,
+        dislikes: dislikesCount,
         estado: sugerencia.estado,
         respuesta_moderador: sugerencia.respuesta_moderador || null,
+        foto_url: sugerencia.foto_url || null,
+        usuario_id: sugerencia.usuario_id,
         usuarios: usuarioInfo ? {
           id: usuarioInfo.id,
           nombre: usuarioInfo.nombre,
@@ -1016,10 +1040,9 @@ app.get('/sugerencias/mantenimiento', async (req, res) => {
 // 2. Ruta para actualizar el estado de una sugerencia (ej. en_proceso, realizada)
 app.patch('/sugerencias/:id/estado', async (req, res) => {
   const { id } = req.params;
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
   const { estado } = req.body;
 
-  // Validación de permisos de acceso (Mantenimiento o Admin)
   if (userRole !== 'mantenimiento' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
@@ -1069,11 +1092,47 @@ app.patch('/sugerencias/:id/estado', async (req, res) => {
   }
 });
 
-// 3. Ruta para crear una nueva tarea de mantenimiento
-app.post('/mantenimiento/tareas', async (req, res) => {
-  const userRole = req.headers['x-user-role'];
+// 3. Ruta para obtener todas las tareas de mantenimiento
+app.get('/mantenimiento/tareas', async (req, res) => {
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Mantenimiento o Admin)
+  if (userRole !== 'mantenimiento' && userRole !== 'admin') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
+    });
+  }
+
+  try {
+    const { data: tareas, error } = await supabase
+      .from('tareas_mantenimiento')
+      .select('*, sugerencias (id, titulo, categoria, estado), usuarios:creado_por (id, nombre, correo)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error al obtener tareas de mantenimiento:", error);
+      return res.status(500).json({
+        error: "Error interno al obtener las tareas de mantenimiento",
+        details: error.message
+      });
+    }
+
+    return res.status(200).json({
+      message: "Tareas de mantenimiento obtenidas exitosamente",
+      tareas
+    });
+  } catch (error) {
+    console.error("Error inesperado en GET /mantenimiento/tareas:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al obtener las tareas",
+      details: error.message
+    });
+  }
+});
+
+// 4. Ruta para crear una nueva tarea de mantenimiento
+app.post('/mantenimiento/tareas', async (req, res) => {
+  const userRole = normalizeRole(req.headers['x-user-role']);
+
   if (userRole !== 'mantenimiento' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
@@ -1107,7 +1166,8 @@ app.post('/mantenimiento/tareas', async (req, res) => {
         {
           sugerencia_id: sugerencia_id.trim(),
           titulo: titulo.trim(),
-          creado_por: creado_por.trim()
+          creado_por: creado_por.trim(),
+          estado: 'en_proceso'
         }
       ])
       .select()
@@ -1134,12 +1194,11 @@ app.post('/mantenimiento/tareas', async (req, res) => {
   }
 });
 
-// 4. Ruta para eliminar una tarea de mantenimiento por su ID
+// 5. Ruta para eliminar una tarea de mantenimiento por su ID
 app.delete('/mantenimiento/tareas/:id', async (req, res) => {
   const { id } = req.params;
-  const userRole = req.headers['x-user-role'];
+  const userRole = normalizeRole(req.headers['x-user-role']);
 
-  // Validación de permisos de acceso (Mantenimiento o Admin)
   if (userRole !== 'mantenimiento' && userRole !== 'admin') {
     return res.status(403).json({
       error: "Acceso denegado. Se requieren permisos de mantenimiento o administrador."
@@ -1180,7 +1239,7 @@ app.delete('/mantenimiento/tareas/:id', async (req, res) => {
   }
 });
 
-// Iniciar servidor en el puerto local
+// Iniciar servidor en el puerto y host configurados
 app.listen(Config.PORT, Config.HOST, () => {
   console.log(`Servidor backend listo en http://${Config.HOST}:${Config.PORT}`);
 });

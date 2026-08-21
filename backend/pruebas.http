@@ -164,5 +164,32 @@ x-user-role: mantenimiento
 DELETE http://127.0.0.1:8080/mantenimiento/tareas/e890a4f5-9df2-4609-cd12-f35ef345b0a0 HTTP/1.1
 x-user-role: mantenimiento
 
+###
 
+### 16. Usuarios / Perfil - Actualizar Foto de Perfil
+PUT http://127.0.0.1:8080/usuarios/60685e1f-3d41-42c2-b9a6-d71739856b22/foto HTTP/1.1
+Content-Type: application/json
+x-user-role: secretaria
 
+{
+  "foto_url": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=DanielMendoza"
+}
+
+###
+
+### 17. Usuarios / Perfil - Actualizar Información de Usuario
+PUT http://127.0.0.1:8080/usuarios/60685e1f-3d41-42c2-b9a6-d71739856b22 HTTP/1.1
+Content-Type: application/json
+x-user-role: secretaria
+
+{
+  "nombre": "Daniel Mendoza Morales",
+  "correo": "daniel.mendoza@alumno.montepiedra.edu.ec",
+  "rol": "alumno"
+}
+
+###
+
+### 18. Mantenimiento - Obtener todas las tareas
+GET http://127.0.0.1:8080/mantenimiento/tareas HTTP/1.1
+x-user-role: mantenimiento
