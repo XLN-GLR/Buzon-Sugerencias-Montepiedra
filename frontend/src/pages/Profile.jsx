@@ -108,92 +108,10 @@ export default function Profile() {
             </div>
           </div>
 
-          {user.rol !== 'administrador' && (
-            <div className="profile-card-footer-info">
-              <span>🔒 Esta cuenta es de <strong>solo lectura</strong>. Los datos son administrados por el departamento de TI.</span>
-            </div>
-          )}
-        </div>
-
-        {/* Administrator Exclusive Panel: Update Student Avatars */}
-        {user.rol === 'administrador' && (
-          <div className="profile-card admin-avatar-manager">
-            <h2 className="profile-card-title">🛡️ Gestión de Fotos de Estudiantes</h2>
-            <p className="profile-card-subtitle">
-              Sube o actualiza las fotos de perfil de los estudiantes para facilitar su identificación institucional.
-            </p>
-
-            <form onSubmit={handleSaveAvatar}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="student-select">Seleccionar Estudiante</label>
-                <select
-                  id="student-select"
-                  value={selectedStudentEmail}
-                  onChange={handleStudentSelect}
-                  required
-                >
-                  <option value="">-- Elige un estudiante --</option>
-                  {students.map(s => (
-                    <option key={s.usuario_id} value={s.correo}>
-                      {s.nombre} ({s.correo})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedStudentEmail && (
-                <div className="animate-fadeIn">
-                  {/* Preview avatar */}
-                  <div className="avatar-preview-container">
-                    <span className="form-label">Vista Previa</span>
-                    <img 
-                      src={newAvatarUrl || 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=placeholder'} 
-                      alt="Vista previa de avatar" 
-                      className="avatar-preview-img" 
-                      onError={(e) => {
-                        e.target.src = 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=error';
-                      }}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="avatar-url">URL de la Foto / Avatar</label>
-                    <input
-                      type="url"
-                      id="avatar-url"
-                      placeholder="https://ejemplo.com/foto.jpg o URL de Dicebear"
-                      value={newAvatarUrl}
-                      onChange={(e) => setNewAvatarUrl(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  {/* Preset avatar options for ease of testing */}
-                  <div className="form-group">
-                    <label className="form-label">Presets Rápidos (Ilustraciones de Prueba)</label>
-                    <div className="preset-grid">
-                      {PRESET_AVATARS.map(p => (
-                        <button
-                          key={p.name}
-                          type="button"
-                          className="preset-btn"
-                          onClick={() => applyPreset(p.url)}
-                          title={p.name}
-                        >
-                          <img src={p.url} alt={p.name} className="preset-img-thumb" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-                    💾 Actualizar Foto del Estudiante
-                  </button>
-                </div>
-              )}
-            </form>
+          <div className="profile-card-footer-info">
+            <span>ℹ️ Los datos institucionales de esta cuenta son administrados por el departamento de Secretaría y Administración de Montepiedra.</span>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

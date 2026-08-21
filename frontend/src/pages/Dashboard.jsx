@@ -10,11 +10,17 @@ export default function Dashboard() {
   const [apiSource, setApiSource] = useState('local');
   const [activeTab, setActiveTab] = useState('sugerencias'); // 'sugerencias' or 'usuarios'
 
-  // Toolbar search, filter, and sort states
+  // Toolbar search, filter, and sort states for suggestions
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('Todas');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [sortBy, setSortBy] = useState('recientes'); // 'recientes', 'antiguas', 'votadas'
+
+  // Toolbar search, filter, and sort states for User Directory
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userFilterRole, setUserFilterRole] = useState('todos');
+  const [userFilterCourse, setUserFilterCourse] = useState('todos');
+  const [userSortOrder, setUserSortOrder] = useState('az'); // 'az', 'za'
 
   // Modal form states
   const [selectedItem, setSelectedItem] = useState(null);
@@ -369,40 +375,113 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* TAB 2: Directorio de Usuarios */}
+      {/* TAB 2: Directorio de Usuarios con Filtros Avanzados */}
       {activeTab === 'usuarios' && (
-        <div className="table-responsive-wrapper animate-fadeIn">
-          <table className="custom-data-table">
-            <thead>
-              <tr>
-                <th>Cédula</th>
-                <th>Nombre</th>
-                <th>Rol</th>
-                <th>Correo Institucional</th>
-                <th>Curso / Área</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profiles.map((p) => (
-                <tr key={p.usuario_id || p.cedula}>
-                  <td><strong className="code-badge">{p.cedula}</strong></td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <img src={p.avatar} alt="Avatar" className="table-avatar-thumb" />
-                      <span>{p.nombre}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`badge-role-pill role-${p.rol}`}>
-                      {p.rol}
-                    </span>
-                  </td>
-                  <td>{p.correo}</td>
-                  <td>{p.curso || 'N/A'}</td>
+        <div className="animate-fadeIn">
+          {/* Toolbar de Filtros Avanzados del Directorio */}
+          <div className="toolbar-container" style={{ marginBottom: '1.5rem' }}>
+            <div className="toolbar-search">
+              <span className="toolbar-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Buscar usuario por nombre o cédula..."
+                value={userSearchTerm}
+                onChange={(e) => setUserSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="toolbar-filters">
+              <div className="filter-select-wrapper">
+                <span className="select-icon">🎭</span>
+                <select
+                  value={userFilterRole}
+                  onChange={(e) => setUserFilterRole(e.target.value)}
+                >
+                  <option value="todos">Todos los roles</option>
+                  <option value="alumno">Alumnos</option>
+                  <option value="profesor">Profesores</option>
+                  <option value="mantenimiento">Mantenimiento</option>
+                  <option value="secretaria">Secretaría</option>
+                  <option value="administrador">Administradores</option>
+                </select>
+              </div>
+
+              <div className="filter-select-wrapper">
+                <span className="select-icon">🎓</span>
+                <select
+                  value={userFilterCourse}
+                  onChange={(e) => setUserFilterCourse(e.target.value)}
+                >
+                  <option value="todos">Todos los cursos</option>
+                  <option value="8vo de Básica">8vo de Básica</option>
+                  <option value="9no de Básica">9no de Básica</option>
+                  <option value="10mo de Básica">10mo de Básica</option>
+                  <option value="1ro de Bachillerato">1ro de Bachillerato</option>
+                  <option value="2do de Bachillerato">2do de Bachillerato</option>
+                  <option value="3ro de Bachillerato">3ro de Bachillerato</option>
+                </select>
+              </div>
+
+              <div className="filter-select-wrapper">
+                <span className="select-icon">🔤</span>
+                <select
+                  value={userSortOrder}
+                  onChange={(e) => setUserSortOrder(e.target.value)}
+                >
+                  <option value="az">Orden A-Z</option>
+                  <option value="za">Orden Z-A</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="table-responsive-wrapper">
+            <table className="custom-data-table">
+              <thead>
+                <tr>
+                  <th>Cédula</th>
+                  <th>Nombre</th>
+                  <th>Rol</th>
+                  <th>Correo Institucional</th>
+                  <th>Curso / Área</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {profiles
+                  .filter(p => {
+                    const matchesSearch = (p.nombre || '').toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                                          (p.cedula || '').includes(userSearchTerm) ||
+                                          (p.correo || '').toLowerCase().includes(userSearchTerm.toLowerCase());
+                    const matchesRole = userFilterRole === 'todos' || p.rol === userFilterRole;
+                    const matchesCourse = userFilterCourse === 'todos' || (p.curso || '').toLowerCase() === userFilterCourse.toLowerCase();
+                    return matchesSearch && matchesRole && matchesCourse;
+                  })
+                  .sort((a, b) => {
+                    const nameA = (a.nombre || '').toLowerCase();
+                    const nameB = (b.nombre || '').toLowerCase();
+                    return userSortOrder === 'za' ? nameB.localeCompare(nameA) : nameA.localeCompare(nameB);
+                  })
+                  .map((p) => (
+                    <tr key={p.usuario_id || p.cedula}>
+                      <td><strong className="code-badge">{p.cedula}</strong></td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <img src={p.avatar} alt="Avatar" className="table-avatar-thumb" />
+                          <span>{p.nombre}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge-role-pill role-${p.rol}`}>
+                          {p.rol}
+                        </span>
+                      </td>
+                      <td>{p.correo}</td>
+                      <td>{p.curso || 'N/A'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -22,8 +22,9 @@ export default function Board() {
     setLoading(true);
     setErrorMessage('');
     try {
-      // 1. Envío obligatorio del rol del usuario activo en sesión
-      const result = await api.getSuggestions(user ? user.rol : 'alumno');
+      // 1. Envío de rol y ID del usuario para evaluar estado inicial de sus votos
+      const userId = user ? (user.usuario_id || user.cedula) : null;
+      const result = await api.getSuggestions(user ? user.rol : 'alumno', userId);
       setSuggestions(result.data);
       setApiSource(result.source);
     } catch (err) {
@@ -37,7 +38,7 @@ export default function Board() {
     loadSuggestions();
   }, [user]);
 
-  // Manejo de votación limitada: Like (👍) / Dislike (👎)
+  // Manejo de votación con Toggle (desmarcar o cambiar voto)
   const handleVote = async (id, voteType, e) => {
     e.stopPropagation();
     if (!user) return;
@@ -50,7 +51,7 @@ export default function Board() {
 
     if (result.success) {
       setSuggestions(prev => 
-        prev.map(s => s.id === id ? { ...s, votos: result.votos } : s)
+        prev.map(s => s.id === id ? { ...s, votos: result.votos, user_vote: result.currentVote } : s)
       );
     }
   };
@@ -314,14 +315,14 @@ export default function Board() {
                       </span>
                     </div>
 
-                    {/* Sistema de Votación Like / Dislike */}
+                    {/* Sistema de Votación Like / Dislike con desmarcado Toggle */}
                     <div className="card-actions-section">
                       <div className="vote-buttons-group">
                         <button 
                           className={`vote-btn like-btn ${userVote === 'like' ? 'active-like' : ''}`}
                           onClick={(e) => handleVote(item.id, 'like', e)}
-                          title="Apoyar propuesta (Like)"
-                          disabled={votingId === item.id || userVote === 'like'}
+                          title={userVote === 'like' ? "Quitar mi voto" : "Apoyar propuesta (Like)"}
+                          disabled={votingId === item.id}
                         >
                           <span className="vote-icon">👍</span>
                           <span className="vote-count">{item.votos || 0}</span>
@@ -330,8 +331,8 @@ export default function Board() {
                         <button 
                           className={`vote-btn dislike-btn ${userVote === 'dislike' ? 'active-dislike' : ''}`}
                           onClick={(e) => handleVote(item.id, 'dislike', e)}
-                          title="No apoyar propuesta (Dislike)"
-                          disabled={votingId === item.id || userVote === 'dislike'}
+                          title={userVote === 'dislike' ? "Quitar mi voto" : "No apoyar propuesta (Dislike)"}
+                          disabled={votingId === item.id}
                         >
                           <span className="vote-icon">👎</span>
                         </button>

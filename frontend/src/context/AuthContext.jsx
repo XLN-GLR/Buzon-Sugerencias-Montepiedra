@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { api } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -90,7 +91,6 @@ export function AuthProvider({ children }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Aseguramos que los nuevos roles estén disponibles si se usaba versión previa
         const hasSecretaria = parsed.some(p => p.rol === 'secretaria');
         const hasMantenimiento = parsed.some(p => p.rol === 'mantenimiento');
         if (!hasSecretaria || !hasMantenimiento) {
@@ -112,6 +112,39 @@ export function AuthProvider({ children }) {
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Sincronizar perfiles reales desde Supabase al iniciar
+  useEffect(() => {
+    async function loadBackendProfiles() {
+      const res = await api.getUsers(user?.rol || 'secretaria');
+      if (res && res.data && Array.isArray(res.data)) {
+        const backendProfiles = res.data.map(u => ({
+          usuario_id: u.id,
+          cedula: u.cedula || '',
+          nombre: u.nombre || 'Usuario',
+          rol: u.rol ? u.rol.toLowerCase() : 'alumno',
+          correo: u.correo || '',
+          curso: 'N/A',
+          avatar: u.foto_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(u.nombre || 'User')}`,
+          isFirstLogin: Boolean(u.es_primer_ingreso),
+          password: null
+        }));
+
+        setProfiles(prevProfiles => {
+          const merged = [...backendProfiles];
+          prevProfiles.forEach(p => {
+            const existsInBackend = merged.some(b => b.usuario_id === p.usuario_id || (b.cedula && p.cedula && b.cedula === p.cedula));
+            if (!existsInBackend) {
+              merged.push(p);
+            }
+          });
+          localStorage.setItem('montepiedra_user_profiles', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    }
+    loadBackendProfiles();
+  }, []);
+
   // Sincronizar datos del usuario activo si su perfil se actualiza
   useEffect(() => {
     if (user) {
@@ -125,7 +158,7 @@ export function AuthProvider({ children }) {
 
   // Validar número de cédula en el sistema
   const validateCedula = (cedulaClean) => {
-    const found = profiles.find(p => p.cedula.trim() === cedulaClean.trim());
+    const found = profiles.find(p => p.cedula && p.cedula.trim() === cedulaClean.trim());
     if (!found) {
       return { exists: false, user: null, isFirstLogin: false };
     }
@@ -142,7 +175,7 @@ export function AuthProvider({ children }) {
     
     let updatedUser = null;
     const updatedProfiles = profiles.map(p => {
-      if (p.cedula.trim() === cedulaClean.trim()) {
+      if (p.cedula && p.cedula.trim() === cedulaClean.trim()) {
         updatedUser = {
           ...p,
           password: effectivePassword,
@@ -166,12 +199,11 @@ export function AuthProvider({ children }) {
 
   // Login con Cédula y Contraseña
   const loginWithPassword = (cedulaClean, password) => {
-    const found = profiles.find(p => p.cedula.trim() === cedulaClean.trim());
+    const found = profiles.find(p => p.cedula && p.cedula.trim() === cedulaClean.trim());
     if (!found) {
       return { success: false, error: 'La cédula ingresada no está registrada en Montepiedra.' };
     }
 
-    // Si aún no ha configurado clave
     if (found.isFirstLogin) {
       return { success: false, isFirstLogin: true, user: found };
     }
@@ -192,10 +224,15 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('user');
   };
 
-  // Actualizar avatar de estudiante por correo
-  const updateStudentAvatar = (email, newAvatarUrl) => {
+  // Actualizar avatar/foto de estudiante o usuario conectado con backend
+  const updateStudentAvatar = async (email, newAvatarUrl) => {
+    const target = profiles.find(p => p.correo && p.correo.toLowerCase() === email.toLowerCase());
+    if (target && target.usuario_id) {
+      await api.updateUserPhoto(target.usuario_id, newAvatarUrl, user?.rol || 'secretaria', user?.usuario_id);
+    }
+
     const updated = profiles.map(p => {
-      if (p.correo.toLowerCase() === email.toLowerCase()) {
+      if (p.correo && p.correo.toLowerCase() === email.toLowerCase()) {
         return { ...p, avatar: newAvatarUrl };
       }
       return p;
@@ -205,72 +242,195 @@ export function AuthProvider({ children }) {
     return true;
   };
 
+  // Editar usuario completo (Nombre, Cédula, Correo, Rol, Curso, Foto) conectado con Supabase
+  const editUser = async (userId, updatedData) => {
+    try {
+      await api.updateUser(userId, {
+        nombre: updatedData.nombre,
+        cedula: updatedData.cedula,
+        correo: updatedData.correo,
+        rol: updatedData.rol,
+        foto_url: updatedData.avatar || updatedData.foto_url
+      }, user?.rol || 'admin');
+    } catch (e) {
+      console.warn('Error al actualizar en backend:', e.message);
+    }
+
+    const updatedProfiles = profiles.map(p => {
+      if (p.usuario_id === userId || (p.cedula && p.cedula === updatedData.cedula)) {
+        return {
+          ...p,
+          nombre: updatedData.nombre !== undefined ? updatedData.nombre : p.nombre,
+          cedula: updatedData.cedula !== undefined ? updatedData.cedula : p.cedula,
+          correo: updatedData.correo !== undefined ? updatedData.correo : p.correo,
+          rol: updatedData.rol !== undefined ? updatedData.rol : p.rol,
+          curso: updatedData.curso !== undefined ? updatedData.curso : p.curso,
+          avatar: updatedData.avatar !== undefined ? updatedData.avatar : (updatedData.foto_url !== undefined ? updatedData.foto_url : p.avatar)
+        };
+      }
+      return p;
+    });
+
+    setProfiles(updatedProfiles);
+    localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updatedProfiles));
+
+    // Si el usuario editado es el mismo usuario en sesión activa, actualizar su sesión
+    if (user && (user.usuario_id === userId || user.cedula === updatedData.cedula)) {
+      const activeUpdated = updatedProfiles.find(p => p.usuario_id === userId || p.cedula === updatedData.cedula);
+      if (activeUpdated) {
+        setUser(activeUpdated);
+        localStorage.setItem('user', JSON.stringify(activeUpdated));
+      }
+    }
+
+    return { success: true };
+  };
+
   // --- Métodos de Gestión para Secretaría / Administración ---
 
-  // 1. Agregar usuario individual
-  const addUser = (userData) => {
-    const cedulaExists = profiles.some(p => p.cedula === userData.cedula.trim());
+  // 1. Agregar usuario individual conectado con la BD de Supabase
+  const addUser = async (userData) => {
+    const cedulaClean = (userData.cedula || '').trim();
+    const cedulaExists = profiles.some(p => p.cedula && p.cedula.trim() === cedulaClean);
     if (cedulaExists) {
       return { success: false, error: 'Ya existe un usuario registrado con este número de cédula.' };
     }
 
-    const newUser = {
-      usuario_id: `usr-${Date.now()}`,
-      cedula: userData.cedula.trim(),
-      nombre: userData.nombre.trim(),
-      rol: userData.rol.toLowerCase(),
-      correo: userData.correo.trim(),
-      curso: userData.curso ? userData.curso.trim() : 'N/A',
-      avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(userData.nombre)}`,
-      isFirstLogin: true,
-      password: null
-    };
+    try {
+      const res = await api.createUser({
+        cedula: cedulaClean,
+        nombre: userData.nombre.trim(),
+        correo: userData.correo.trim(),
+        rol: userData.rol ? userData.rol.toLowerCase() : 'alumno',
+        avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(userData.nombre)}`
+      }, user?.rol || 'secretaria');
 
-    const updated = [newUser, ...profiles];
-    setProfiles(updated);
-    localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
-    return { success: true, user: newUser };
+      const createdUserFromDb = res.data;
+
+      const newUser = {
+        usuario_id: createdUserFromDb.id || `usr-${Date.now()}`,
+        cedula: createdUserFromDb.cedula || cedulaClean,
+        nombre: createdUserFromDb.nombre || userData.nombre.trim(),
+        rol: (createdUserFromDb.rol || userData.rol).toLowerCase(),
+        correo: createdUserFromDb.correo || userData.correo.trim(),
+        curso: userData.curso ? userData.curso.trim() : 'N/A',
+        avatar: createdUserFromDb.foto_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(userData.nombre)}`,
+        isFirstLogin: Boolean(createdUserFromDb.es_primer_ingreso),
+        password: null
+      };
+
+      setProfiles(prev => {
+        const updated = [newUser, ...prev];
+        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+        return updated;
+      });
+
+      return { success: true, user: newUser, source: 'backend' };
+    } catch (error) {
+      console.warn('Falla en la API Supabase backend al crear usuario, usando fallback local:', error.message);
+      const newUser = {
+        usuario_id: `usr-${Date.now()}`,
+        cedula: cedulaClean,
+        nombre: userData.nombre.trim(),
+        rol: userData.rol.toLowerCase(),
+        correo: userData.correo.trim(),
+        curso: userData.curso ? userData.curso.trim() : 'N/A',
+        avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(userData.nombre)}`,
+        isFirstLogin: true,
+        password: null
+      };
+
+      setProfiles(prev => {
+        const updated = [newUser, ...prev];
+        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+        return updated;
+      });
+      return { success: true, user: newUser, source: 'local', error: error.message };
+    }
   };
 
-  // 2. Importar nómina masiva (Excel/CSV parseado)
-  const importUsersBatch = (usersList) => {
+  // 2. Importar nómina masiva (Excel/CSV parseado) conectada con Supabase
+  const importUsersBatch = async (usersList) => {
     let addedCount = 0;
-    const currentCedulas = new Set(profiles.map(p => p.cedula.trim()));
-    const newItems = [];
+    const currentCedulas = new Set(profiles.map(p => (p.cedula || '').trim()));
+    const newItemsToBackend = [];
 
-    usersList.forEach((u, index) => {
+    usersList.forEach((u) => {
       const cedulaClean = (u.cedula || '').toString().trim();
       if (cedulaClean && !currentCedulas.has(cedulaClean)) {
         currentCedulas.add(cedulaClean);
-        newItems.push({
-          usuario_id: `batch-${Date.now()}-${index}`,
+        newItemsToBackend.push({
           cedula: cedulaClean,
           nombre: (u.nombre || 'Estudiante Importado').trim(),
           rol: (u.rol || 'alumno').toLowerCase(),
           correo: (u.correo || `${cedulaClean}@alumno.montepiedra.edu.ec`).trim(),
           curso: (u.curso || '1ro de Bachillerato').trim(),
-          avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(u.nombre || cedulaClean)}`,
-          isFirstLogin: true,
-          password: null
+          avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(u.nombre || cedulaClean)}`
         });
-        addedCount++;
       }
     });
 
-    if (newItems.length > 0) {
-      const updated = [...newItems, ...profiles];
-      setProfiles(updated);
-      localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+    if (newItemsToBackend.length === 0) {
+      return { success: true, count: 0 };
     }
 
-    return { success: true, count: addedCount };
+    try {
+      const res = await api.importUsersBatch(newItemsToBackend, user?.rol || 'secretaria');
+      const createdList = res.data || [];
+
+      const newProfiles = createdList.map(u => ({
+        usuario_id: u.id,
+        cedula: u.cedula,
+        nombre: u.nombre,
+        rol: u.rol.toLowerCase(),
+        correo: u.correo,
+        curso: 'N/A',
+        avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(u.nombre)}`,
+        isFirstLogin: Boolean(u.es_primer_ingreso),
+        password: null
+      }));
+
+      setProfiles(prev => {
+        const updated = [...newProfiles, ...prev];
+        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+        return updated;
+      });
+      return { success: true, count: res.count || newProfiles.length, source: 'backend' };
+    } catch (error) {
+      console.warn('Backend importUsersBatch falló, guardando localmente:', error.message);
+      const fallbackItems = newItemsToBackend.map((u, index) => ({
+        usuario_id: `batch-${Date.now()}-${index}`,
+        cedula: u.cedula,
+        nombre: u.nombre,
+        rol: u.rol,
+        correo: u.correo,
+        curso: u.curso,
+        avatar: u.avatar,
+        isFirstLogin: true,
+        password: null
+      }));
+
+      setProfiles(prev => {
+        const updated = [...fallbackItems, ...prev];
+        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+        return updated;
+      });
+      return { success: true, count: fallbackItems.length, source: 'local' };
+    }
   };
 
-  // 3. Eliminar usuario
-  const deleteUser = (usuario_id) => {
-    const updated = profiles.filter(p => p.usuario_id !== usuario_id);
-    setProfiles(updated);
-    localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+  // 3. Eliminar usuario conectado a Supabase
+  const deleteUser = async (usuario_id) => {
+    try {
+      await api.deleteUser(usuario_id, user?.rol || 'secretaria');
+    } catch (e) {
+      console.warn('Error al eliminar en backend Supabase:', e.message);
+    }
+    setProfiles(prev => {
+      const updated = prev.filter(p => p.usuario_id !== usuario_id);
+      localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+      return updated;
+    });
     return { success: true };
   };
 
@@ -306,6 +466,7 @@ export function AuthProvider({ children }) {
       loginWithPassword, 
       logout, 
       updateStudentAvatar,
+      editUser,
       addUser,
       importUsersBatch,
       deleteUser,

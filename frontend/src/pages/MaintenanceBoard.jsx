@@ -134,19 +134,11 @@ export default function MaintenanceBoard() {
     <div className="container">
       {/* Cabecera */}
       <div className="page-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 className="page-title">🔨 Tablón de Tareas de Mantenimiento</h1>
-            <p className="page-subtitle">
-              Gestión operativa y seguimiento de requerimientos de infraestructura y reparaciones escolares.
-            </p>
-          </div>
-          <button 
-            className="btn btn-primary"
-            onClick={() => setIsNewTaskModalOpen(true)}
-          >
-            ➕ Añadir Tarea de Infraestructura
-          </button>
+        <div>
+          <h1 className="page-title">🔨 Tablón de Tareas de Mantenimiento</h1>
+          <p className="page-subtitle">
+            Gestión operativa y seguimiento de requerimientos de infraestructura previamente aprobados.
+          </p>
         </div>
       </div>
 
@@ -289,56 +281,6 @@ export default function MaintenanceBoard() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Modal para Crear Nueva Tarea de Infraestructura */}
-      {isNewTaskModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content animate-fadeIn">
-            <div className="modal-header">
-              <h2>➕ Nueva Tarea de Mantenimiento</h2>
-              <button className="modal-close" onClick={() => setIsNewTaskModalOpen(false)}>✕</button>
-            </div>
-            <form onSubmit={handleCreateTask}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="task-title">Título de la Reparación / Requerimiento</label>
-                <input
-                  id="task-title"
-                  type="text"
-                  placeholder="Ej. Cambio de cerradura en laboratorio de química"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="task-desc">Detalles del Trabajo a Realizar</label>
-                <textarea
-                  id="task-desc"
-                  rows="4"
-                  placeholder="Especifica el bloque, aula o área física y los materiales necesarios..."
-                  value={newTaskDesc}
-                  onChange={(e) => setNewTaskDesc(e.target.value)}
-                  required
-                ></textarea>
-              </div>
-
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setIsNewTaskModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Guardar Tarea
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>

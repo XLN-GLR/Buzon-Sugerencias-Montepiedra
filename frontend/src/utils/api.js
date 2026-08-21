@@ -152,21 +152,26 @@ export function normalizeRoleForHeader(role) {
   const lower = role.toLowerCase();
   if (lower === 'administrador' || lower === 'admin') return 'admin';
   if (lower === 'profesor' || lower === 'docente') return 'profesor';
-  if (lower === 'mantenimiento') return 'profesor'; // Mantenimiento tiene permisos operativos
-  if (lower === 'secretaria' || lower === 'secretaría') return 'admin'; // Secretaría tiene permisos de gestión
+  if (lower === 'mantenimiento') return 'mantenimiento';
+  if (lower === 'secretaria' || lower === 'secretaría') return 'secretaria';
   return 'alumno';
 }
 
 export const api = {
-  // 1. Obtener todas las sugerencias con envío de header 'x-user-role'
-  async getSuggestions(userRole = 'alumno') {
+  // 1. Obtener todas las sugerencias con envío de header 'x-user-role' y 'x-user-id'
+  async getSuggestions(userRole = 'alumno', userId = null) {
     const headerRole = normalizeRoleForHeader(userRole);
+    const headers = {
+      'x-user-role': headerRole
+    };
+    if (userId) {
+      headers['x-user-id'] = String(userId);
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/sugerencias`, {
         method: 'GET',
-        headers: {
-          'x-user-role': headerRole
-        }
+        headers
       });
 
       if (!response.ok) {
@@ -176,6 +181,19 @@ export const api = {
       const result = await response.json();
 
       if (result.data) {
+        // Si la API devuelve user_vote para el usuario actual, actualizar la caché de votos de usuario
+        if (userId && Array.isArray(result.data)) {
+          const userVotes = JSON.parse(localStorage.getItem('montepiedra_user_votes') || '{}');
+          const userMap = userVotes[userId] || {};
+          result.data.forEach(item => {
+            if (item.user_vote !== undefined) {
+              userMap[item.id] = item.user_vote;
+            }
+          });
+          userVotes[userId] = userMap;
+          localStorage.setItem('montepiedra_user_votes', JSON.stringify(userVotes));
+        }
+
         // Almacenar caché local
         localStorage.setItem('montepiedra_sugerencias', JSON.stringify(result.data));
         return { data: result.data, source: 'backend' };
@@ -268,39 +286,53 @@ export const api = {
     }
   },
 
-  // 3. Sistema de Votación (Like / Dislike limitado a 1 voto por usuario)
+  // 3. Sistema de Votación (Like / Dislike con toggle de desmarcado)
   async voteSuggestion(id, voteType = 'like', userId = 'usr-default', userRole = 'alumno') {
     const userVotes = JSON.parse(localStorage.getItem('montepiedra_user_votes') || '{}');
     const userMap = userVotes[userId] || {};
-    const previousVote = userMap[id]; // 'like', 'dislike', or undefined
+    const previousVote = userMap[id]; // 'like', 'dislike', or null/undefined
 
-    if (previousVote === voteType) {
-      return { success: false, message: 'Ya has emitido este voto en esta propuesta.' };
-    }
+    // Si el usuario vuelve a presionar la opción elegida previamente -> TOGGLE OFF (quitar voto)
+    const isTogglingOff = previousVote === voteType;
+    const nextVote = isTogglingOff ? null : voteType;
 
     let voteDelta = 0;
-    if (!previousVote) {
-      voteDelta = voteType === 'like' ? 1 : -1;
-    } else if (previousVote === 'like' && voteType === 'dislike') {
-      voteDelta = -2;
+    if (isTogglingOff) {
+      voteDelta = previousVote === 'like' ? -1 : 0;
+    } else if (!previousVote) {
+      voteDelta = voteType === 'like' ? 1 : 0;
     } else if (previousVote === 'dislike' && voteType === 'like') {
-      voteDelta = 2;
+      voteDelta = 1;
+    } else if (previousVote === 'like' && voteType === 'dislike') {
+      voteDelta = -1;
     }
 
-    // Registrar el voto del usuario
-    userMap[id] = voteType;
+    // Registrar o remover voto localmente
+    if (nextVote) {
+      userMap[id] = nextVote;
+    } else {
+      delete userMap[id];
+    }
     userVotes[userId] = userMap;
     localStorage.setItem('montepiedra_user_votes', JSON.stringify(userVotes));
 
-    // Intentar llamada a backend si es like
+    let backendResult = null;
     try {
-      if (voteType === 'like' && !previousVote) {
-        await fetch(`${API_BASE_URL}/sugerencias/${id}/votar`, {
-          method: 'POST',
-          headers: {
-            'x-user-role': normalizeRoleForHeader(userRole)
-          }
-        });
+      const response = await fetch(`${API_BASE_URL}/sugerencias/${id}/votar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': normalizeRoleForHeader(userRole),
+          'x-user-id': String(userId)
+        },
+        body: JSON.stringify({
+          usuario_id: String(userId),
+          tipo_voto: voteType
+        })
+      });
+
+      if (response.ok) {
+        backendResult = await response.json();
       }
     } catch (e) {
       console.info('Voto sincronizado localmente:', e.message);
@@ -311,8 +343,12 @@ export const api = {
     let updatedVotes = 0;
     const updated = localData.map(item => {
       if (item.id === id) {
-        const current = item.votos || 0;
-        updatedVotes = Math.max(0, current + voteDelta);
+        if (backendResult && backendResult.likes !== undefined) {
+          updatedVotes = backendResult.likes;
+        } else {
+          const current = item.votos || 0;
+          updatedVotes = Math.max(0, current + voteDelta);
+        }
         return { ...item, votos: updatedVotes };
       }
       return item;
@@ -322,8 +358,8 @@ export const api = {
     return {
       success: true,
       id,
-      votos: updatedVotes,
-      currentVote: voteType
+      votos: backendResult?.likes !== undefined ? backendResult.likes : updatedVotes,
+      currentVote: backendResult?.currentVote !== undefined ? backendResult.currentVote : nextVote
     };
   },
 
@@ -419,6 +455,164 @@ export const api = {
       localStorage.setItem('montepiedra_sugerencias', JSON.stringify(filtered));
 
       return { success: true, source: 'local', error: error.message };
+    }
+  },
+
+  // --- MÓDULO 3: GESTIÓN DE USUARIOS Y NÓMINAS EN SUPABASE ---
+  async getUsers(userRole = 'secretaria') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios`, {
+        method: 'GET',
+        headers: {
+          'x-user-role': headerRole
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+      const data = await response.json();
+      return { data, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al consultar usuarios en backend:', error.message);
+      return { data: null, source: 'local', error: error.message };
+    }
+  },
+
+  async createUser(userData, userRole = 'secretaria') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    const payload = {
+      cedula: userData.cedula ? String(userData.cedula).trim() : '',
+      nombre: userData.nombre ? String(userData.nombre).trim() : '',
+      correo: userData.correo ? String(userData.correo).trim() : '',
+      rol: userData.rol ? String(userData.rol).trim() : 'alumno',
+      foto_url: userData.avatar || userData.foto_url || null
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      return { data: resData.usuario, message: resData.message, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al registrar usuario en Supabase backend:', error.message);
+      throw error;
+    }
+  },
+
+  async importUsersBatch(usersList, userRole = 'secretaria') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    const payload = {
+      nomina: usersList.map(u => ({
+        cedula: u.cedula ? String(u.cedula).trim() : '',
+        nombre: u.nombre ? String(u.nombre).trim() : '',
+        correo: u.correo ? String(u.correo).trim() : '',
+        rol: u.rol ? String(u.rol).trim() : 'alumno',
+        foto_url: u.avatar || u.foto_url || null
+      }))
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/registro-masivo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      return { data: resData.usuarios, count: resData.total_registrados, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al importar nómina masiva en backend:', error.message);
+      throw error;
+    }
+  },
+
+  async deleteUser(userId, userRole = 'secretaria') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-role': headerRole
+        }
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      return { success: true, usuario: resData.usuario, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al eliminar usuario en backend:', error.message);
+      throw error;
+    }
+  },
+
+  async updateUserPhoto(userId, photoUrl, userRole = 'secretaria', requesterId = null) {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/${userId}/foto`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole,
+          'x-user-id': String(requesterId || userId)
+        },
+        body: JSON.stringify({ foto_url: photoUrl })
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      return { success: true, data: resData, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al actualizar foto en backend:', error.message);
+      return { success: false, error: error.message, source: 'local' };
+    }
+  },
+
+  async updateUser(userId, userData, userRole = 'secretaria') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      return { success: true, usuario: resData.usuario, source: 'backend' };
+    } catch (error) {
+      console.warn('Error al actualizar usuario en backend:', error.message);
+      return { success: false, error: error.message, source: 'local' };
     }
   }
 };

@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Pages.css';
 
+const COURSE_OPTIONS = [
+  '8vo de Básica',
+  '9no de Básica',
+  '10mo de Básica',
+  '1ro de Bachillerato',
+  '2do de Bachillerato',
+  '3ro de Bachillerato'
+];
+
 export default function SecretariaPanel() {
-  const { profiles, addUser, importUsersBatch, deleteUser, exportUsersCSV } = useAuth();
+  const { profiles, addUser, editUser, importUsersBatch, deleteUser, exportUsersCSV } = useAuth();
 
   // Estados de pestañas y búsqueda
   const [activeTab, setActiveTab] = useState('nomina'); // 'nomina', 'registro', 'archivo'
@@ -21,6 +30,11 @@ export default function SecretariaPanel() {
   const [dragActive, setDragActive] = useState(false);
   const [parsedPreview, setParsedPreview] = useState([]);
   const [selectedFileName, setSelectedFileName] = useState('');
+  const [isCsvGuideModalOpen, setIsCsvGuideModalOpen] = useState(false);
+
+  // Estado para Edición de Usuario y Foto
+  const [editingUser, setEditingUser] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Mensajes de alerta
   const [alert, setAlert] = useState({ type: '', message: '' });
@@ -47,7 +61,7 @@ export default function SecretariaPanel() {
   };
 
   // 1. Registro Individual
-  const handleRegisterUser = (e) => {
+  const handleRegisterUser = async (e) => {
     e.preventDefault();
     if (!formCedula || !formNombre || !formCorreo) return;
 
@@ -56,7 +70,7 @@ export default function SecretariaPanel() {
       return;
     }
 
-    const result = addUser({
+    const result = await addUser({
       cedula: formCedula,
       nombre: formNombre,
       rol: formRol,
@@ -65,7 +79,7 @@ export default function SecretariaPanel() {
     });
 
     if (result.success) {
-      showAlert('success', `Estudiante/Usuario ${formNombre} registrado exitosamente.`);
+      showAlert('success', `Estudiante/Usuario ${formNombre} registrado exitosamente en la nómina y base de datos.`);
       setFormCedula('');
       setFormNombre('');
       setFormCorreo('');
@@ -130,10 +144,10 @@ export default function SecretariaPanel() {
     reader.readAsText(file);
   };
 
-  const handleConfirmBatchImport = () => {
+  const handleConfirmBatchImport = async () => {
     if (parsedPreview.length === 0) return;
 
-    const result = importUsersBatch(parsedPreview);
+    const result = await importUsersBatch(parsedPreview);
     if (result.success) {
       showAlert('success', `¡Importación completada! Se añadieron ${result.count} nuevos usuarios a la nómina.`);
       setParsedPreview([]);
@@ -156,13 +170,52 @@ export default function SecretariaPanel() {
     ]);
   };
 
-  // 3. Eliminar usuario
-  const handleDelete = (userId, userName) => {
-    if (!window.confirm(`¿Está seguro de eliminar de la nómina a "${userName}"?`)) {
-      return;
+  // Manejar apertura de Modal de Edición de Usuario
+  const handleOpenEdit = (userProfile) => {
+    setEditingUser({
+      usuario_id: userProfile.usuario_id || userProfile.id,
+      cedula: userProfile.cedula || '',
+      nombre: userProfile.nombre || '',
+      correo: userProfile.correo || '',
+      rol: userProfile.rol || 'alumno',
+      curso: userProfile.curso || '1ro de Bachillerato',
+      avatar: userProfile.avatar || userProfile.foto_url || 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=user'
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // Guardar Cambios de Usuario y Foto de Perfil
+  const handleSaveEditUser = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    const result = await editUser(editingUser.usuario_id, editingUser);
+    if (result.success) {
+      showAlert('success', `Datos y foto de ${editingUser.nombre} actualizados correctamente en la base de datos.`);
+      setIsEditModalOpen(false);
+      setEditingUser(null);
+    } else {
+      showAlert('error', 'No se pudieron guardar los cambios del usuario.');
     }
-    deleteUser(userId);
-    showAlert('success', `Usuario ${userName} eliminado de la nómina.`);
+  };
+
+  // Generar y descargar archivo Guía/Formato CSV
+  const handleDownloadCSVGuide = () => {
+    const csvHeader = 'cedula,nombre,correo,curso,rol\n';
+    const sample1 = '0981122334,Alejandro Morales,alejandro.morales@alumno.montepiedra.edu.ec,3ro de Bachillerato,alumno\n';
+    const sample2 = '0982233445,Valeria Castro,valeria.castro@alumno.montepiedra.edu.ec,2do de Bachillerato,alumno\n';
+    const sample3 = '0983344556,Mateo Benítez,mateo.benitez@alumno.montepiedra.edu.ec,1ro de Bachillerato,alumno\n';
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + csvHeader + sample1 + sample2 + sample3;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'Guia_Formato_Nomina_Montepiedra.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setIsCsvGuideModalOpen(true);
   };
 
   // Filtro de Usuarios en Tabla
@@ -306,13 +359,23 @@ export default function SecretariaPanel() {
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <button
-                          className="btn-delete-row"
-                          onClick={() => handleDelete(p.usuario_id, p.nombre)}
-                          title="Eliminar usuario de la nómina"
-                        >
-                          🗑️
-                        </button>
+                        <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                            onClick={() => handleOpenEdit(p)}
+                            title="Editar datos y foto de perfil"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            className="btn-delete-row"
+                            onClick={() => handleDelete(p.usuario_id, p.nombre)}
+                            title="Eliminar usuario de la nómina"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -374,14 +437,16 @@ export default function SecretariaPanel() {
 
             {formRol === 'alumno' && (
               <div className="form-group animate-fadeIn">
-                <label className="form-label" htmlFor="new-curso">Curso o Grado</label>
-                <input
+                <label className="form-label" htmlFor="new-curso">Curso o Grado (Seleccione)</label>
+                <select
                   id="new-curso"
-                  type="text"
-                  placeholder="Ej. 1ro de Bachillerato A"
                   value={formCurso}
                   onChange={(e) => setFormCurso(e.target.value)}
-                />
+                >
+                  {COURSE_OPTIONS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -454,13 +519,21 @@ export default function SecretariaPanel() {
             </label>
           </div>
 
-          {/* Botón para cargar plantilla de prueba instantánea */}
-          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+          {/* Botones de acción e importación masiva */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '1.25rem' }}>
+            <button 
+              type="button" 
+              className="btn btn-secondary"
+              onClick={handleDownloadCSVGuide}
+              style={{ fontSize: '0.9rem', borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+            >
+              📥 Descargar Guía/Formato CSV
+            </button>
             <button 
               type="button" 
               className="btn btn-secondary"
               onClick={loadDemoFile}
-              style={{ fontSize: '0.85rem' }}
+              style={{ fontSize: '0.9rem' }}
             >
               ⚡ Cargar Archivo Demo de Prueba (5 Estudiantes)
             </button>
@@ -515,6 +588,145 @@ export default function SecretariaPanel() {
               </div>
             </div>
           )}
+        </div>
+      )}
+      {/* MODAL 1: Editar Datos y Foto de Perfil de Usuario */}
+      {isEditModalOpen && editingUser && (
+        <div className="modal-backdrop">
+          <div className="modal-content animate-fadeIn" style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>✏️ Editar Usuario y Foto de Perfil</h2>
+              <button className="modal-close" onClick={() => setIsEditModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveEditUser}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '1rem', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)' }}>
+                <img src={editingUser.avatar} alt="Avatar actual" className="profile-big-avatar" style={{ width: '64px', height: '64px' }} />
+                <div>
+                  <h4 style={{ margin: 0, color: 'var(--color-primary)' }}>{editingUser.nombre}</h4>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Cédula: {editingUser.cedula}</span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-nombre">Nombre Completo</label>
+                <input
+                  id="edit-nombre"
+                  type="text"
+                  value={editingUser.nombre}
+                  onChange={(e) => setEditingUser({ ...editingUser, nombre: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-cedula">Cédula</label>
+                <input
+                  id="edit-cedula"
+                  type="text"
+                  value={editingUser.cedula}
+                  onChange={(e) => setEditingUser({ ...editingUser, cedula: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-correo">Correo Institucional</label>
+                <input
+                  id="edit-correo"
+                  type="email"
+                  value={editingUser.correo}
+                  onChange={(e) => setEditingUser({ ...editingUser, correo: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-rol">Rol Institucional</label>
+                <select
+                  id="edit-rol"
+                  value={editingUser.rol}
+                  onChange={(e) => setEditingUser({ ...editingUser, rol: e.target.value })}
+                >
+                  <option value="alumno">alumno</option>
+                  <option value="profesor">profesor</option>
+                  <option value="mantenimiento">mantenimiento</option>
+                  <option value="secretaria">secretaria</option>
+                  <option value="administrador">administrador</option>
+                </select>
+              </div>
+
+              {editingUser.rol === 'alumno' && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit-curso">Curso o Grado</label>
+                  <select
+                    id="edit-curso"
+                    value={editingUser.curso || '1ro de Bachillerato'}
+                    onChange={(e) => setEditingUser({ ...editingUser, curso: e.target.value })}
+                  >
+                    {COURSE_OPTIONS.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-avatar">URL de Foto de Perfil</label>
+                <input
+                  id="edit-avatar"
+                  type="url"
+                  placeholder="https://ejemplo.com/foto.jpg"
+                  value={editingUser.avatar || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, avatar: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  💾 Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Guía de Formato CSV */}
+      {isCsvGuideModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content animate-fadeIn" style={{ maxWidth: '650px' }}>
+            <div className="modal-header">
+              <h2>📋 Guía y Formato Oficial de Importación CSV</h2>
+              <button className="modal-close" onClick={() => setIsCsvGuideModalOpen(false)}>✕</button>
+            </div>
+            <div style={{ padding: '0.5rem 0' }}>
+              <p>El sistema acepta archivos <code>.csv</code> o <code>.xlsx</code> con las siguientes 5 cabeceras obligatorias:</p>
+              <div style={{ backgroundColor: 'var(--color-bg)', padding: '1rem', borderRadius: 'var(--radius-md)', fontFamily: 'monospace', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                cedula,nombre,correo,curso,rol
+              </div>
+
+              <h4 style={{ color: 'var(--color-primary)', marginTop: '1rem' }}>Reglas de Validación:</h4>
+              <ul style={{ paddingLeft: '1.25rem', fontSize: '0.9rem', color: 'var(--color-text-muted)', lineHeight: '1.6' }}>
+                <li><strong>Cédula:</strong> Número único de 10 dígitos (servirá como clave inicial).</li>
+                <li><strong>Nombre:</strong> Nombres y apellidos completos.</li>
+                <li><strong>Correo:</strong> Debe terminar en <code>@alumno.montepiedra.edu.ec</code> o <code>@montepiedra.edu.ec</code>.</li>
+                <li><strong>Curso:</strong> Utilizar etiquetas estándar: <em>8vo de Básica, 9no de Básica, 10mo de Básica, 1ro de Bachillerato, 2do de Bachillerato, 3ro de Bachillerato</em>.</li>
+                <li><strong>Rol:</strong> <em>alumno, profesor, mantenimiento, secretaria, administrador</em>.</li>
+              </ul>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setIsCsvGuideModalOpen(false)}>
+                Entendido
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

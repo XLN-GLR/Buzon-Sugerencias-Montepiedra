@@ -64,7 +64,8 @@ app.post('/sugerencias', async (req, res) => {
           usuario_id,
           estado: 'pendiente',
           es_anonimo: es_anonimo ?? false,
-          votos: votos ?? 0,
+          likes: 0,
+          dislikes: 0,
           respuesta_moderador: respuesta_moderador ?? null,
           foto_url: foto_url ?? null
         }
@@ -92,6 +93,7 @@ app.post('/sugerencias', async (req, res) => {
 // Ruta para obtener todas las sugerencias, ordenadas por created_at (más recientes primero)
 app.get('/sugerencias', async (req, res) => {
   const userRole = req.headers['x-user-role']; // Rol del usuario actual
+  const currentUserId = req.headers['x-user-id'] || req.query.usuario_id; // ID del usuario consultante
 
   try {
     const { data, error } = await supabase
@@ -101,6 +103,21 @@ app.get('/sugerencias', async (req, res) => {
 
     if (error) {
       throw error;
+    }
+
+    // Obtener mapa de votos del usuario actual si existe currentUserId
+    let userVotesMap = {};
+    if (currentUserId) {
+      const { data: votosUsuario } = await supabase
+        .from('votos_sugerencias')
+        .select('sugerencia_id, tipo_voto')
+        .eq('usuario_id', String(currentUserId).trim());
+      
+      if (votosUsuario) {
+        votosUsuario.forEach(v => {
+          userVotesMap[v.sugerencia_id] = v.tipo_voto;
+        });
+      }
     }
 
     // Aplicar regla de privacidad para sugerencias anónimas y estructurar el retorno exacto
@@ -131,6 +148,8 @@ app.get('/sugerencias', async (req, res) => {
         }
       }
 
+      const calculatedVotos = sugerencia.likes ?? sugerencia.votos ?? 0;
+
       // Estructura exacta de salida requerida por el contrato (columnas de sugerencia + objeto usuarios)
       return {
         id: sugerencia.id,
@@ -139,11 +158,12 @@ app.get('/sugerencias', async (req, res) => {
         descripcion: sugerencia.descripcion,
         categoria: sugerencia.categoria,
         es_anonimo: sugerencia.es_anonimo ?? false,
-        votos: sugerencia.votos ?? 0,
+        votos: calculatedVotos,
         likes: sugerencia.likes ?? 0,
         dislikes: sugerencia.dislikes ?? 0,
         estado: sugerencia.estado || 'pendiente',
         respuesta_moderador: sugerencia.respuesta_moderador || null,
+        user_vote: userVotesMap[sugerencia.id] || null,
         usuarios: usuarioFinal
       };
     });
@@ -161,7 +181,7 @@ app.get('/sugerencias', async (req, res) => {
   }
 });
 
-// Ruta para registrar un voto (Likes / Dislikes con restricción de un voto por usuario)
+// Ruta para registrar / alternar un voto (Likes / Dislikes con Toggle de voto y desmarcado)
 app.post('/sugerencias/:id/votar', async (req, res) => {
   const { id } = req.params;
   const { usuario_id, tipo_voto } = req.body;
@@ -204,7 +224,7 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
     // 3. Consultar si el usuario ya emitió un voto previo en esta sugerencia
     const { data: votoExistente, error: fetchVotoError } = await supabase
       .from('votos_sugerencias')
-      .select('id')
+      .select('id, tipo_voto')
       .eq('sugerencia_id', id)
       .eq('usuario_id', usuario_id.trim())
       .maybeSingle();
@@ -217,45 +237,64 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
       });
     }
 
-    if (votoExistente) {
-      return res.status(400).json({
-        error: "Ya has emitido un voto para esta sugerencia"
-      });
+    let currentLikes = sugerencia.likes || 0;
+    let currentDislikes = sugerencia.dislikes || 0;
+    let nuevoTipoVoto = tipo_voto;
+
+    // CASO A: TOGGLE OFF (Quitar voto si hace clic en el mismo botón)
+    if (votoExistente && votoExistente.tipo_voto === tipo_voto) {
+      await supabase
+        .from('votos_sugerencias')
+        .delete()
+        .eq('id', votoExistente.id);
+
+      if (tipo_voto === 'like') {
+        currentLikes = Math.max(0, currentLikes - 1);
+      } else {
+        currentDislikes = Math.max(0, currentDislikes - 1);
+      }
+      nuevoTipoVoto = null;
+    } 
+    // CASO B: SWITCH VOTE (Cambiar de Like a Dislike o viceversa)
+    else if (votoExistente && votoExistente.tipo_voto !== tipo_voto) {
+      await supabase
+        .from('votos_sugerencias')
+        .update({ tipo_voto })
+        .eq('id', votoExistente.id);
+
+      if (tipo_voto === 'like') {
+        currentLikes = currentLikes + 1;
+        currentDislikes = Math.max(0, currentDislikes - 1);
+      } else {
+        currentDislikes = currentDislikes + 1;
+        currentLikes = Math.max(0, currentLikes - 1);
+      }
+    } 
+    // CASO C: NUEVO VOTO
+    else {
+      await supabase
+        .from('votos_sugerencias')
+        .insert([
+          {
+            sugerencia_id: id,
+            usuario_id: usuario_id.trim(),
+            tipo_voto: tipo_voto.trim()
+          }
+        ]);
+
+      if (tipo_voto === 'like') {
+        currentLikes = currentLikes + 1;
+      } else {
+        currentDislikes = currentDislikes + 1;
+      }
     }
 
-    // 4. Registrar el nuevo voto en la tabla votos_sugerencias
-    const { error: insertVotoError } = await supabase
-      .from('votos_sugerencias')
-      .insert([
-        {
-          sugerencia_id: id,
-          usuario_id: usuario_id.trim(),
-          tipo_voto: tipo_voto.trim()
-        }
-      ]);
-
-    if (insertVotoError) {
-      console.error("Error al insertar voto en votos_sugerencias:", insertVotoError);
-      return res.status(500).json({
-        error: "Error interno del servidor al registrar el voto",
-        details: insertVotoError.message
-      });
-    }
-
-    // 5. Incrementar el contador correspondiente (likes o dislikes) en la tabla sugerencias
-    const currentLikes = sugerencia.likes || 0;
-    const currentDislikes = sugerencia.dislikes || 0;
-
-    const actualizacionContadores = {
-      likes: tipo_voto === 'like' ? currentLikes + 1 : currentLikes,
-      dislikes: tipo_voto === 'dislike' ? currentDislikes + 1 : currentDislikes
-    };
-
+    // Actualizar contadores en la tabla sugerencias
     const { data: updatedData, error: updateError } = await supabase
       .from('sugerencias')
-      .update(actualizacionContadores)
+      .update({ likes: currentLikes, dislikes: currentDislikes, votos: currentLikes })
       .eq('id', id)
-      .select('id, likes, dislikes')
+      .select('id, likes, dislikes, votos')
       .single();
 
     if (updateError) {
@@ -267,10 +306,12 @@ app.post('/sugerencias/:id/votar', async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Voto registrado exitosamente",
+      message: nuevoTipoVoto ? "Voto registrado exitosamente" : "Voto removido exitosamente",
       id: updatedData.id,
+      votos: updatedData.likes,
       likes: updatedData.likes,
-      dislikes: updatedData.dislikes
+      dislikes: updatedData.dislikes,
+      currentVote: nuevoTipoVoto
     });
   } catch (error) {
     console.error("Error inesperado en /sugerencias/:id/votar:", error);
@@ -507,7 +548,7 @@ app.get('/usuarios', async (req, res) => {
   try {
     let query = supabase
       .from('usuarios')
-      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso')
       .order('nombre', { ascending: true });
 
     if (rol && typeof rol === 'string' && rol.trim()) {
@@ -584,12 +625,13 @@ app.delete('/usuarios/:id', async (req, res) => {
 app.put('/usuarios/:id/foto', async (req, res) => {
   const { id } = req.params;
   const userRole = req.headers['x-user-role'];
+  const requesterId = req.headers['x-user-id'];
   const { foto_url } = req.body;
 
-  // Validación de acceso secretaría o admin
-  if (userRole !== 'secretaria' && userRole !== 'admin') {
+  // Permiso: administración, secretaría o el propio usuario actualizando su foto
+  if (userRole !== 'secretaria' && userRole !== 'admin' && userRole !== 'administrador' && String(requesterId) !== String(id)) {
     return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador para cambiar la foto de otro usuario."
     });
   }
 
@@ -628,6 +670,50 @@ app.put('/usuarios/:id/foto', async (req, res) => {
     console.error("Error al actualizar foto de perfil en Supabase:", error);
     return res.status(500).json({
       error: "Error interno del servidor al actualizar la foto de perfil",
+      details: error.message
+    });
+  }
+});
+
+// Ruta para actualizar la información de un usuario (Nombre, Cédula, Correo, Rol, Foto)
+app.put('/usuarios/:id', async (req, res) => {
+  const { id } = req.params;
+  const userRole = req.headers['x-user-role'];
+  const { nombre, cedula, correo, rol, foto_url } = req.body;
+
+  if (userRole !== 'secretaria' && userRole !== 'admin' && userRole !== 'administrador') {
+    return res.status(403).json({
+      error: "Acceso denegado. Se requieren permisos de secretaría o administrador."
+    });
+  }
+
+  try {
+    const updatePayload = {};
+    if (nombre) updatePayload.nombre = String(nombre).trim();
+    if (cedula) updatePayload.cedula = String(cedula).trim();
+    if (correo) updatePayload.correo = String(correo).trim();
+    if (rol) updatePayload.rol = String(rol).trim().toLowerCase();
+    if (foto_url !== undefined) updatePayload.foto_url = foto_url;
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('usuarios')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso')
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.status(200).json({
+      message: "Usuario actualizado exitosamente",
+      usuario: updatedUser
+    });
+  } catch (error) {
+    console.error("Error al actualizar usuario en Supabase:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al actualizar el usuario",
       details: error.message
     });
   }
