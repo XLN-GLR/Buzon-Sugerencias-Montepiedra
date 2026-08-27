@@ -85,25 +85,17 @@ const INITIAL_PROFILES = [
 ];
 
 export function AuthProvider({ children }) {
-  // Registro central de usuarios persistido en localStorage
+  // Registro central de usuarios iniciado como arreglo vacío [] y poblado desde backend
   const [profiles, setProfiles] = useState(() => {
     const saved = localStorage.getItem('montepiedra_user_profiles');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        const hasSecretaria = parsed.some(p => p.rol === 'secretaria');
-        const hasMantenimiento = parsed.some(p => p.rol === 'mantenimiento');
-        if (!hasSecretaria || !hasMantenimiento) {
-          localStorage.setItem('montepiedra_user_profiles', JSON.stringify(INITIAL_PROFILES));
-          return INITIAL_PROFILES;
-        }
-        return parsed;
+        return JSON.parse(saved);
       } catch (e) {
-        return INITIAL_PROFILES;
+        return [];
       }
     }
-    localStorage.setItem('montepiedra_user_profiles', JSON.stringify(INITIAL_PROFILES));
-    return INITIAL_PROFILES;
+    return [];
   });
 
   // Usuario en sesión activa
@@ -129,21 +121,13 @@ export function AuthProvider({ children }) {
           password: null
         }));
 
-        setProfiles(prevProfiles => {
-          const merged = [...backendProfiles];
-          prevProfiles.forEach(p => {
-            const existsInBackend = merged.some(b => b.usuario_id === p.usuario_id || (b.cedula && p.cedula && b.cedula === p.cedula));
-            if (!existsInBackend) {
-              merged.push(p);
-            }
-          });
-          localStorage.setItem('montepiedra_user_profiles', JSON.stringify(merged));
-          return merged;
-        });
+        setProfiles(backendProfiles);
+        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(backendProfiles));
       }
     }
     loadBackendProfiles();
   }, []);
+
 
   // Sincronizar datos del usuario activo si su perfil se actualiza
   useEffect(() => {
@@ -422,17 +406,22 @@ export function AuthProvider({ children }) {
   // 3. Eliminar usuario conectado a Supabase
   const deleteUser = async (usuario_id) => {
     try {
-      await api.deleteUser(usuario_id, user?.rol || 'secretaria');
+      const res = await api.deleteUser(usuario_id, user?.rol || 'secretaria');
+      if (res && res.success) {
+        setProfiles(prev => {
+          const updated = prev.filter(p => p.usuario_id !== usuario_id);
+          localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
+          return updated;
+        });
+        return { success: true };
+      }
+      return { success: false, error: 'No se pudo eliminar el usuario en el backend.' };
     } catch (e) {
       console.warn('Error al eliminar en backend Supabase:', e.message);
+      return { success: false, error: e.message || 'Error al eliminar el usuario.' };
     }
-    setProfiles(prev => {
-      const updated = prev.filter(p => p.usuario_id !== usuario_id);
-      localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
-      return updated;
-    });
-    return { success: true };
   };
+
 
   // 4. Exportar nómina a CSV
   const exportUsersCSV = () => {

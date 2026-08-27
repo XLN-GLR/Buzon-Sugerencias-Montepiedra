@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { validateEcuadorianCedula } from '../utils/api';
 import './Pages.css';
 
 const COURSE_OPTIONS = [
@@ -12,7 +13,9 @@ const COURSE_OPTIONS = [
 ];
 
 export default function SecretariaPanel() {
-  const { profiles, addUser, editUser, importUsersBatch, deleteUser, exportUsersCSV } = useAuth();
+  const { user, profiles, addUser, editUser, importUsersBatch, deleteUser, exportUsersCSV } = useAuth();
+
+  const isSecretaria = user?.rol === 'secretaria' || user?.rol === 'secretaría';
 
   // Estados de pestañas y búsqueda
   const [activeTab, setActiveTab] = useState('nomina'); // 'nomina', 'registro', 'archivo'
@@ -21,6 +24,7 @@ export default function SecretariaPanel() {
 
   // Formulario individual
   const [formCedula, setFormCedula] = useState('');
+  const [formCedulaError, setFormCedulaError] = useState('');
   const [formNombre, setFormNombre] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
   const [formRol, setFormRol] = useState('alumno');
@@ -34,6 +38,7 @@ export default function SecretariaPanel() {
 
   // Estado para Edición de Usuario y Foto
   const [editingUser, setEditingUser] = useState(null);
+  const [editCedulaError, setEditCedulaError] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Mensajes de alerta
@@ -44,6 +49,30 @@ export default function SecretariaPanel() {
     setTimeout(() => {
       setAlert({ type: '', message: '' });
     }, 5000);
+  };
+
+  // Manejador de Cédula en Formulario de Alta
+  const handleFormCedulaChange = (val) => {
+    const clean = val.replace(/\D/g, '').slice(0, 10);
+    setFormCedula(clean);
+    if (clean.length > 0) {
+      const validation = validateEcuadorianCedula(clean);
+      setFormCedulaError(validation.isValid ? '' : validation.message);
+    } else {
+      setFormCedulaError('');
+    }
+  };
+
+  // Manejador de Cédula en Modal de Edición
+  const handleEditCedulaChange = (val) => {
+    const clean = val.replace(/\D/g, '').slice(0, 10);
+    setEditingUser(prev => prev ? ({ ...prev, cedula: clean }) : null);
+    if (clean.length > 0) {
+      const validation = validateEcuadorianCedula(clean);
+      setEditCedulaError(validation.isValid ? '' : validation.message);
+    } else {
+      setEditCedulaError('');
+    }
   };
 
   // Generador automático de correo institucional según nombre y rol
@@ -60,13 +89,33 @@ export default function SecretariaPanel() {
     }
   };
 
+  // Manejo de eliminación de usuario con validación de backend
+  const handleDelete = async (usuario_id, nombre) => {
+    if (!window.confirm(`¿Está seguro de que desea eliminar a "${nombre}" de la nómina?`)) {
+      return;
+    }
+    const result = await deleteUser(usuario_id);
+    if (result && result.success) {
+      showAlert('success', `El usuario ${nombre} ha sido eliminado correctamente.`);
+    } else {
+      showAlert('error', result?.error || 'No se pudo eliminar el usuario en el backend.');
+    }
+  };
+
   // 1. Registro Individual
   const handleRegisterUser = async (e) => {
     e.preventDefault();
     if (!formCedula || !formNombre || !formCorreo) return;
 
-    if (formCedula.length < 9) {
-      showAlert('error', 'El número de cédula debe tener al menos 10 dígitos.');
+    const validation = validateEcuadorianCedula(formCedula);
+    if (!validation.isValid) {
+      setFormCedulaError(validation.message);
+      showAlert('error', validation.message);
+      return;
+    }
+
+    if (isSecretaria && (formRol === 'administrador' || formRol === 'admin')) {
+      showAlert('error', 'El rol Secretaría no tiene permisos para crear usuarios Administradores.');
       return;
     }
 
@@ -81,6 +130,7 @@ export default function SecretariaPanel() {
     if (result.success) {
       showAlert('success', `Estudiante/Usuario ${formNombre} registrado exitosamente en la nómina y base de datos.`);
       setFormCedula('');
+      setFormCedulaError('');
       setFormNombre('');
       setFormCorreo('');
       setFormCurso('1ro de Bachillerato');
@@ -89,6 +139,7 @@ export default function SecretariaPanel() {
       showAlert('error', result.error || 'Error al registrar el usuario.');
     }
   };
+
 
   // 2. Procesamiento y Parseo de Archivo (CSV / Excel simulado)
   const handleFileUpload = (file) => {
@@ -189,15 +240,29 @@ export default function SecretariaPanel() {
     e.preventDefault();
     if (!editingUser) return;
 
+    const validation = validateEcuadorianCedula(editingUser.cedula);
+    if (!validation.isValid) {
+      setEditCedulaError(validation.message);
+      showAlert('error', validation.message);
+      return;
+    }
+
+    if (isSecretaria && (editingUser.rol === 'administrador' || editingUser.rol === 'admin')) {
+      showAlert('error', 'El rol Secretaría no puede asignar el rol de Administrador.');
+      return;
+    }
+
     const result = await editUser(editingUser.usuario_id, editingUser);
     if (result.success) {
       showAlert('success', `Datos y foto de ${editingUser.nombre} actualizados correctamente en la base de datos.`);
       setIsEditModalOpen(false);
       setEditingUser(null);
+      setEditCedulaError('');
     } else {
       showAlert('error', 'No se pudieron guardar los cambios del usuario.');
     }
   };
+
 
   // Generar y descargar archivo Guía/Formato CSV
   const handleDownloadCSVGuide = () => {
@@ -402,10 +467,12 @@ export default function SecretariaPanel() {
                 type="text"
                 placeholder="Ej. 0928877665"
                 value={formCedula}
-                onChange={(e) => setFormCedula(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                onChange={(e) => handleFormCedulaChange(e.target.value)}
                 maxLength={10}
                 required
+                className={formCedulaError ? 'input-invalid' : ''}
               />
+              {formCedulaError && <p className="input-error-msg">⚠️ {formCedulaError}</p>}
             </div>
 
             <div className="form-group">
@@ -431,7 +498,7 @@ export default function SecretariaPanel() {
                 <option value="profesor">Profesor / Docente</option>
                 <option value="mantenimiento">Mantenimiento</option>
                 <option value="secretaria">Secretaría</option>
-                <option value="administrador">Administrador</option>
+                {!isSecretaria && <option value="administrador">Administrador</option>}
               </select>
             </div>
 
@@ -470,10 +537,15 @@ export default function SecretariaPanel() {
               >
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary">
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={Boolean(formCedulaError) || !formCedula}
+              >
                 💾 Registrar en Nómina
               </button>
             </div>
+
           </form>
         </div>
       )}
@@ -624,9 +696,12 @@ export default function SecretariaPanel() {
                   id="edit-cedula"
                   type="text"
                   value={editingUser.cedula}
-                  onChange={(e) => setEditingUser({ ...editingUser, cedula: e.target.value })}
+                  onChange={(e) => handleEditCedulaChange(e.target.value)}
+                  maxLength={10}
                   required
+                  className={editCedulaError ? 'input-invalid' : ''}
                 />
+                {editCedulaError && <p className="input-error-msg">⚠️ {editCedulaError}</p>}
               </div>
 
               <div className="form-group">
@@ -651,7 +726,7 @@ export default function SecretariaPanel() {
                   <option value="profesor">profesor</option>
                   <option value="mantenimiento">mantenimiento</option>
                   <option value="secretaria">secretaria</option>
-                  <option value="administrador">administrador</option>
+                  {!isSecretaria && <option value="administrador">administrador</option>}
                 </select>
               </div>
 
@@ -689,10 +764,15 @@ export default function SecretariaPanel() {
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={Boolean(editCedulaError) || !editingUser.cedula}
+                >
                   💾 Guardar Cambios
                 </button>
               </div>
+
             </form>
           </div>
         </div>

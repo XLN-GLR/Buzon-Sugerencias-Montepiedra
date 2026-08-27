@@ -614,5 +614,88 @@ export const api = {
       console.warn('Error al actualizar usuario en backend:', error.message);
       return { success: false, error: error.message, source: 'local' };
     }
+  },
+
+  // 6. Obtener comentarios de una sugerencia
+  async getComments(sugerenciaId, userRole = 'alumno') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/sugerencias/${sugerenciaId}/comentarios`, {
+        method: 'GET',
+        headers: { 'x-user-role': headerRole }
+      });
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+      const data = await response.json();
+      return { data: data.comentarios || data.data || [], source: 'backend' };
+    } catch (e) {
+      console.warn('Error al obtener comentarios de backend:', e.message);
+      const localComments = JSON.parse(localStorage.getItem(`comments_${sugerenciaId}`) || '[]');
+      return { data: localComments, source: 'local' };
+    }
+  },
+
+  // 7. Crear comentario en una sugerencia
+  async createComment(sugerenciaId, { usuario_id, texto }, userRole = 'alumno') {
+    const headerRole = normalizeRoleForHeader(userRole);
+    try {
+      const response = await fetch(`${API_BASE_URL}/sugerencias/${sugerenciaId}/comentarios`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': headerRole
+        },
+        body: JSON.stringify({ usuario_id, texto })
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(resData.error || `Error ${response.status}`);
+      }
+
+      const createdObj = resData.comentario || resData.data;
+
+      // Guardar en caché local
+      const localComments = JSON.parse(localStorage.getItem(`comments_${sugerenciaId}`) || '[]');
+      localComments.push(createdObj);
+      localStorage.setItem(`comments_${sugerenciaId}`, JSON.stringify(localComments));
+
+      return { data: createdObj, source: 'backend' };
+    } catch (e) {
+      if (e.message && e.message.includes('inapropiado')) {
+        throw e;
+      }
+      console.warn('Error al enviar comentario a backend, guardando localmente:', e.message);
+      const newComment = {
+        id: `com-${Date.now()}`,
+        sugerencia_id: sugerenciaId,
+        usuario_id,
+        texto,
+        created_at: new Date().toISOString()
+      };
+      const localComments = JSON.parse(localStorage.getItem(`comments_${sugerenciaId}`) || '[]');
+      localComments.push(newComment);
+      localStorage.setItem(`comments_${sugerenciaId}`, JSON.stringify(localComments));
+
+      return { data: newComment, source: 'local' };
+    }
   }
 };
+
+// Función de validación de cédula ecuatoriana
+export function validateEcuadorianCedula(cedula) {
+  if (!cedula || typeof cedula !== 'string') {
+    return { isValid: false, message: 'La cédula es requerida.' };
+  }
+  const clean = cedula.trim();
+  if (!/^\d{10}$/.test(clean)) {
+    return { isValid: false, message: 'La cédula debe contener exactamente 10 dígitos numéricos (no letras ni guiones).' };
+  }
+  const province = parseInt(clean.substring(0, 2), 10);
+  if (province < 1 || province > 24) {
+    return { isValid: false, message: 'Código de provincia inválido. Los 2 primeros dígitos deben estar entre 01 y 24.' };
+  }
+  return { isValid: true, message: '' };
+}
+

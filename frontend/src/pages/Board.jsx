@@ -18,6 +18,15 @@ export default function Board() {
   const [errorMessage, setErrorMessage] = useState('');
   const [votingId, setVotingId] = useState(null);
 
+  // Estados para el Modal de Comentarios
+  const [activeCommentsSug, setActiveCommentsSug] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+
   const loadSuggestions = async () => {
     setLoading(true);
     setErrorMessage('');
@@ -51,10 +60,71 @@ export default function Board() {
 
     if (result.success) {
       setSuggestions(prev => 
-        prev.map(s => s.id === id ? { ...s, votos: result.votos, user_vote: result.currentVote } : s)
+        prev.map(s => {
+          if (s.id === id) {
+            const newLikes = result.likes !== undefined ? result.likes : (result.votos !== undefined ? result.votos : s.votos);
+            const newDislikes = result.dislikes !== undefined ? result.dislikes : s.dislikes;
+            return {
+              ...s,
+              votos: newLikes,
+              likes: newLikes,
+              dislikes: newDislikes,
+              user_vote: result.currentVote
+            };
+          }
+          return s;
+        })
       );
     }
   };
+
+  // Abrir modal de comentarios
+  const handleOpenCommentsModal = async (sug, e) => {
+    if (e) e.stopPropagation();
+    setActiveCommentsSug(sug);
+    setCommentsLoading(true);
+    setCommentError('');
+    setNewCommentText('');
+    
+    const res = await api.getComments(sug.id, user ? user.rol : 'alumno');
+    setComments(res.data || []);
+    setCommentsLoading(false);
+  };
+
+  // Enviar comentario
+  const handlePostComment = async (e) => {
+    e.preventDefault();
+    if (!activeCommentsSug || !newCommentText.trim() || !user) return;
+
+    setCommentSubmitting(true);
+    setCommentError('');
+
+    try {
+      const userId = user.usuario_id || user.cedula || 'usr-default';
+      const res = await api.createComment(activeCommentsSug.id, {
+        usuario_id: userId,
+        texto: newCommentText.trim()
+      }, user.rol);
+
+      const addedComment = {
+        ...(res.data || {}),
+        usuarios: {
+          id: userId,
+          nombre: user.nombre,
+          foto_url: user.avatar,
+          rol: user.rol
+        }
+      };
+
+      setComments(prev => [...prev, addedComment]);
+      setNewCommentText('');
+    } catch (err) {
+      setCommentError(err.message || 'Error al publicar el comentario.');
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
 
   // Redirección al perfil solo si el usuario creador no es anónimo
   const handleAuthorClick = (authorId, isAnonymous) => {
@@ -335,6 +405,16 @@ export default function Board() {
                           disabled={votingId === item.id}
                         >
                           <span className="vote-icon">👎</span>
+                          <span className="vote-count">{item.dislikes || 0}</span>
+                        </button>
+
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                          onClick={(e) => handleOpenCommentsModal(item, e)}
+                          title="Ver y añadir comentarios a esta propuesta"
+                        >
+                          💬 Comentar
                         </button>
                       </div>
 
@@ -347,6 +427,78 @@ export default function Board() {
           })}
         </div>
       )}
+
+      {/* MODAL FLOTANTE DE COMENTARIOS (ESTILO RED SOCIAL) */}
+      {activeCommentsSug && (
+        <div className="modal-backdrop" onClick={() => setActiveCommentsSug(null)}>
+          <div className="modal-content animate-fadeIn" style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>💬 Comentarios Comunitarios</h2>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                  Propuesta: <strong>"{activeCommentsSug.titulo}"</strong>
+                </p>
+              </div>
+              <button className="modal-close" onClick={() => setActiveCommentsSug(null)}>✕</button>
+            </div>
+
+            <div className="comments-modal-body" style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem', marginBottom: '1.25rem' }}>
+              {commentsLoading ? (
+                <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                  <div className="spinner"></div>
+                  <p>Cargando comentarios...</p>
+                </div>
+              ) : comments.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
+                  <p>💬 No hay comentarios aún. ¡Sé el primero en aportar a esta propuesta!</p>
+                </div>
+              ) : (
+                comments.map((com, index) => {
+                  const authorName = com.usuarios?.nombre || com.nombre || 'Comunidad Montepiedra';
+                  const authorAvatar = com.usuarios?.foto_url || com.foto_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(authorName)}`;
+                  const displayDate = com.created_at ? new Date(com.created_at).toLocaleString() : 'Reciente';
+
+                  return (
+                    <div key={com.id || index} style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem 1rem', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                      <img src={authorAvatar} alt={authorName} style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.875rem', color: 'var(--color-primary)' }}>{authorName}</strong>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{displayDate}</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text)', lineHeight: '1.4' }}>{com.texto}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {commentError && (
+              <div className="alert-banner alert-error" style={{ marginBottom: '1rem' }}>
+                <span>🛑</span>
+                <span>{commentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePostComment} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Escribe un comentario respetuoso..."
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                disabled={commentSubmitting}
+                required
+                style={{ flex: 1 }}
+              />
+              <button type="submit" className="btn btn-primary" disabled={commentSubmitting || !newCommentText.trim()}>
+                {commentSubmitting ? 'Enviando...' : 'Enviar 🚀'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

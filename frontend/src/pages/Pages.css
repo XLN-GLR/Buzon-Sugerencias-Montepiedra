@@ -891,7 +891,26 @@ input, select, textarea {
   box-shadow: none;
 }
 
-/* Profile Layout Grid */
+/* Profile Layout Centered */
+.profile-page-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 120px);
+  padding-top: 1rem;
+  padding-bottom: 2rem;
+}
+
+.profile-layout-centered {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 550px;
+  margin: 0 auto;
+}
+
 .profile-layout-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -899,6 +918,7 @@ input, select, textarea {
   max-width: 900px;
   margin: 0 auto;
 }
+
 
 @media (min-width: 768px) {
   .profile-layout-grid {

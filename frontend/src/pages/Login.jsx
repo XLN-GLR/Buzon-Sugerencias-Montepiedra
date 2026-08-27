@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { validateEcuadorianCedula } from '../utils/api';
 import logoImg from '../assets/logo.png';
 import './Pages.css';
 
@@ -11,6 +12,7 @@ export default function Login() {
   // Estados del flujo de autenticación: 'cedula' -> 'password' o 'setup_password'
   const [step, setStep] = useState('cedula'); 
   const [cedula, setCedula] = useState('');
+  const [cedulaError, setCedulaError] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,19 +31,33 @@ export default function Login() {
     { role: 'Secretaría', name: 'Lcda. Patricia Salinas', cedula: '0944556677', email: 'secretaria@montepiedra.edu.ec', icon: '📑' }
   ];
 
+  // Manejador de cambio en input de Cédula
+  const handleCedulaInputChange = (val) => {
+    const clean = val.replace(/\D/g, '').slice(0, 10);
+    setCedula(clean);
+    setErrorMsg('');
+
+    if (clean.length > 0) {
+      const validation = validateEcuadorianCedula(clean);
+      if (!validation.isValid) {
+        setCedulaError(validation.message);
+      } else {
+        setCedulaError('');
+      }
+    } else {
+      setCedulaError('');
+    }
+  };
+
   // Paso 1: Validar Número de Cédula
   const handleCedulaSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
     const cleanCedula = cedula.trim();
 
-    if (!cleanCedula) {
-      setErrorMsg('Por favor ingrese su número de cédula.');
-      return;
-    }
-
-    if (cleanCedula.length < 9) {
-      setErrorMsg('El número de cédula debe tener al menos 10 dígitos.');
+    const validation = validateEcuadorianCedula(cleanCedula);
+    if (!validation.isValid) {
+      setCedulaError(validation.message);
       return;
     }
 
@@ -66,6 +82,7 @@ export default function Login() {
       }
     }, 300);
   };
+
 
   // Paso 2A: Configuración de contraseña (Primer ingreso)
   const handleSetupPasswordSubmit = (e) => {
@@ -152,27 +169,32 @@ export default function Login() {
                   type="text"
                   placeholder="Ej. 0923456781"
                   value={cedula}
-                  onChange={(e) => setCedula(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => handleCedulaInputChange(e.target.value)}
                   maxLength={10}
                   required
                   autoFocus
-                  className="login-input"
+                  className={`login-input ${cedulaError ? 'input-invalid' : ''}`}
                 />
               </div>
-              <p className="form-help">
-                Ingresa tu número de cédula ecuatoriana de 10 dígitos registrado en secretaría.
-              </p>
+              {cedulaError ? (
+                <p className="input-error-msg">⚠️ {cedulaError}</p>
+              ) : (
+                <p className="form-help">
+                  Ingresa tu número de cédula ecuatoriana de 10 dígitos (provincia 01-24) registrado en secretaría.
+                </p>
+              )}
             </div>
 
             <button 
               type="submit" 
               className="btn btn-primary login-submit-btn" 
-              disabled={loading}
+              disabled={loading || Boolean(cedulaError) || !cedula}
             >
               {loading ? 'Validando Cédula...' : 'Continuar ➔'}
             </button>
           </form>
         )}
+
 
         {/* PASO 2A: Configuración de Contraseña (Primer Ingreso) */}
         {step === 'setup_password' && currentUser && (

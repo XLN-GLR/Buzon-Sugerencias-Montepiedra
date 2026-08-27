@@ -61,22 +61,22 @@ export default function Profile() {
   };
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1 className="page-title">Perfil de Usuario</h1>
+    <div className="container profile-page-container">
+      <div className="page-header" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+        <h1 className="page-title">👤 Perfil de Usuario</h1>
         <p className="page-subtitle">
           Consulta los datos de tu cuenta institucional y gestiona la información de la comunidad.
         </p>
       </div>
 
       {successMsg && (
-        <div className="alert-banner alert-success" style={{ maxWidth: '800px', margin: '0 auto 1.5rem auto' }}>
+        <div className="alert-banner alert-success" style={{ maxWidth: '550px', margin: '0 auto 1.5rem auto' }}>
           <span>✅</span>
           <span>{successMsg}</span>
         </div>
       )}
 
-      <div className="profile-layout-grid">
+      <div className="profile-layout-centered">
         {/* User Profile Card (Visible to all) */}
         <div className="profile-card">
           <div className="profile-card-header">
@@ -92,6 +92,10 @@ export default function Profile() {
           </div>
 
           <div className="profile-details-list">
+            <div className="profile-detail-item">
+              <span className="detail-label">Cédula de Identidad</span>
+              <span className="detail-val"><strong>{user.cedula || 'N/A'}</strong></span>
+            </div>
             <div className="profile-detail-item">
               <span className="detail-label">Correo Institucional</span>
               <span className="detail-val">{user.correo}</span>
@@ -116,3 +120,4 @@ export default function Profile() {
     </div>
   );
 }
+
