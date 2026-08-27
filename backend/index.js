@@ -445,6 +445,154 @@ app.delete('/sugerencias/:id', async (req, res) => {
   }
 });
 
+// 6. Ruta para obtener todos los comentarios de una sugerencia
+app.get('/sugerencias/:id/comentarios', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('comentarios_sugerencias')
+      .select('id, sugerencia_id, usuario_id, texto, created_at, usuarios (id, nombre, foto_url, rol)')
+      .eq('sugerencia_id', id)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.warn(`Advertencia al obtener comentarios para la sugerencia ${id}:`, error.message);
+      // Retornar array vacío para resiliencia del frontend
+      return res.status(200).json({
+        message: "No se pudieron obtener comentarios de la base de datos.",
+        comentarios: [],
+        data: []
+      });
+    }
+
+    const processedData = (data || []).map(comentario => {
+      let usuarioInfo = comentario.usuarios;
+      if (Array.isArray(usuarioInfo)) {
+        usuarioInfo = usuarioInfo[0] || null;
+      }
+      return {
+        id: comentario.id,
+        sugerencia_id: comentario.sugerencia_id,
+        usuario_id: comentario.usuario_id,
+        texto: comentario.texto,
+        created_at: comentario.created_at,
+        usuarios: usuarioInfo ? {
+          id: usuarioInfo.id,
+          nombre: usuarioInfo.nombre,
+          foto_url: usuarioInfo.foto_url,
+          rol: usuarioInfo.rol
+        } : null
+      };
+    });
+
+    return res.status(200).json({
+      message: "Comentarios recuperados exitosamente",
+      comentarios: processedData,
+      data: processedData
+    });
+  } catch (error) {
+    console.error("Error inesperado en GET /sugerencias/:id/comentarios:", error);
+    // Bloque try/catch resiliente que retorna array vacío
+    return res.status(200).json({
+      message: "Error al recuperar los comentarios",
+      comentarios: [],
+      data: []
+    });
+  }
+});
+
+// 7. Ruta para agregar un nuevo comentario a una sugerencia
+app.post('/sugerencias/:id/comentarios', async (req, res) => {
+  const { id } = req.params;
+  const { usuario_id, texto } = req.body;
+
+  // Validación de campos obligatorios
+  if (!usuario_id || typeof usuario_id !== 'string' || !usuario_id.trim() ||
+      !texto || typeof texto !== 'string' || !texto.trim()) {
+    return res.status(400).json({
+      error: "Faltan campos obligatorios. Debes proporcionar usuario_id y texto."
+    });
+  }
+
+  const cleanTexto = String(texto).trim();
+  const cleanUsuarioId = String(usuario_id).trim();
+
+  // Validación de lenguaje inapropiado
+  if (hasProfanity(cleanTexto)) {
+    return res.status(400).json({
+      error: "Contenido inapropiado detectado en el comentario. Por favor, modifique su lenguaje."
+    });
+  }
+
+  try {
+    // 1. Verificar si la sugerencia existe
+    const { data: sugerencia, error: sugError } = await supabase
+      .from('sugerencias')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (sugError || !sugerencia) {
+      return res.status(404).json({
+        error: "La sugerencia especificada no existe."
+      });
+    }
+
+    // 2. Insertar el comentario en Supabase haciendo join con la tabla usuarios
+    const { data, error } = await supabase
+      .from('comentarios_sugerencias')
+      .insert([
+        {
+          sugerencia_id: id,
+          usuario_id: cleanUsuarioId,
+          texto: cleanTexto
+        }
+      ])
+      .select('id, sugerencia_id, usuario_id, texto, created_at, usuarios (id, nombre, foto_url, rol)')
+      .single();
+
+    if (error) {
+      console.error("Error al insertar comentario en Supabase:", error);
+      return res.status(500).json({
+        error: "Error interno del servidor al crear el comentario",
+        details: error.message
+      });
+    }
+
+    let usuarioInfo = data.usuarios;
+    if (Array.isArray(usuarioInfo)) {
+      usuarioInfo = usuarioInfo[0] || null;
+    }
+
+    const createdComment = {
+      id: data.id,
+      sugerencia_id: data.sugerencia_id,
+      usuario_id: data.usuario_id,
+      texto: data.texto,
+      created_at: data.created_at,
+      usuarios: usuarioInfo ? {
+        id: usuarioInfo.id,
+        nombre: usuarioInfo.nombre,
+        foto_url: usuarioInfo.foto_url,
+        rol: usuarioInfo.rol
+      } : null
+    };
+
+    return res.status(201).json({
+      message: "Comentario creado exitosamente",
+      comentario: createdComment,
+      data: createdComment
+    });
+  } catch (error) {
+    console.error("Error inesperado en POST /sugerencias/:id/comentarios:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor al crear el comentario",
+      details: error.message
+    });
+  }
+});
+
 // =======================================================
 // MÓDULO 3: SECRETARÍA (GESTIÓN DE NÓMINAS Y USUARIOS)
 // =======================================================

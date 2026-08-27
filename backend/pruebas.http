@@ -193,3 +193,20 @@ x-user-role: secretaria
 ### 18. Mantenimiento - Obtener todas las tareas
 GET http://127.0.0.1:8080/mantenimiento/tareas HTTP/1.1
 x-user-role: mantenimiento
+
+###
+
+### 19. Comentarios - Obtener comentarios de una sugerencia
+GET http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9/comentarios HTTP/1.1
+
+###
+
+### 20. Comentarios - Publicar un nuevo comentario en una sugerencia
+POST http://127.0.0.1:8080/sugerencias/d798a3e4-8cf1-4509-bc01-e24df234a9f9/comentarios HTTP/1.1
+Content-Type: application/json
+
+{
+  "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+  "texto": "Excelente iniciativa para mejorar las instalaciones del colegio."
+}
+
