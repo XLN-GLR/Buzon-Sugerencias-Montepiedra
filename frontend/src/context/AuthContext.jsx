@@ -7,7 +7,7 @@ const AuthContext = createContext();
 const INITIAL_PROFILES = [
   {
     usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
-    cedula: '0923456781',
+    cedula: '0923456784',
     nombre: 'Daniel Mendoza',
     rol: 'alumno',
     correo: 'daniel@alumno.montepiedra.edu.ec',
@@ -18,7 +18,7 @@ const INITIAL_PROFILES = [
   },
   {
     usuario_id: 'd798a3e4-8cf1-4509-bc01-e24df234a9f9',
-    cedula: '0911223344',
+    cedula: '0911223345',
     nombre: 'Ing. Mauricio Ramos',
     rol: 'administrador',
     correo: 'admin@montepiedra.edu.ec',
@@ -29,7 +29,7 @@ const INITIAL_PROFILES = [
   },
   {
     usuario_id: '91ab8e1f-3d41-42c2-b9a6-d71739856c44',
-    cedula: '0955667788',
+    cedula: '0955667787',
     nombre: 'Dr. Gabriel Villalba',
     rol: 'profesor',
     correo: 'profesor@montepiedra.edu.ec',
@@ -40,7 +40,7 @@ const INITIAL_PROFILES = [
   },
   {
     usuario_id: '45607e1f-1a2b-3c4d-5e6f-789012345678',
-    cedula: '0933445566',
+    cedula: '0933445561',
     nombre: 'Sr. Roberto Gómez',
     rol: 'mantenimiento',
     correo: 'mantenimiento@montepiedra.edu.ec',
@@ -51,7 +51,7 @@ const INITIAL_PROFILES = [
   },
   {
     usuario_id: '78901e1f-2b3c-4d5e-6f7a-890123456789',
-    cedula: '0944556677',
+    cedula: '0944556679',
     nombre: 'Lcda. Patricia Salinas',
     rol: 'secretaria',
     correo: 'secretaria@montepiedra.edu.ec',
@@ -62,25 +62,25 @@ const INITIAL_PROFILES = [
   },
   {
     usuario_id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
-    cedula: '0987654321',
+    cedula: '0987654324',
     nombre: 'Juan Pérez',
     rol: 'alumno',
     correo: 'juan.perez@alumno.montepiedra.edu.ec',
     curso: '10mo de Básica',
     avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan',
     isFirstLogin: false,
-    password: '0987654321'
+    password: '0987654324'
   },
   {
     usuario_id: '82807g3b-5f63-64e4-d1c8-f93951078d44',
-    cedula: '0977889900',
+    cedula: '0977889906',
     nombre: 'Pedro Gómez',
     rol: 'alumno',
     correo: 'pedro.gomez@alumno.montepiedra.edu.ec',
     curso: '8vo de Básica',
     avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Pedro',
     isFirstLogin: false,
-    password: '0977889900'
+    password: '0977889906'
   }
 ];
 

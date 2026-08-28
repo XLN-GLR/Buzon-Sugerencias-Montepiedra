@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { api, getAuthorInfo, formatRole } from '../utils/api';
 import './Pages.css';
 
 export default function Dashboard() {
@@ -297,8 +297,9 @@ export default function Dashboard() {
                   {processedSuggestions.map((item) => {
                     const statusNorm = (item.estado || 'pendiente').toLowerCase().replace(' ', '-');
                     const displayDate = item.created_at ? item.created_at.split('T')[0] : '2026-07-08';
-                    const isAnon = Boolean(item.es_anonimo);
-                    const authorName = item.usuarios?.nombre || (isAnon ? 'Anónimo' : 'Comunidad');
+                    const authorInfo = getAuthorInfo(item, user ? user.rol : 'profesor');
+                    const likesCount = item.likes !== undefined ? item.likes : (item.votos || 0);
+                    const dislikesCount = item.dislikes || 0;
 
                     return (
                       <tr key={item.id}>
@@ -323,14 +324,22 @@ export default function Dashboard() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <img 
-                              src={item.usuarios?.foto_url || 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=user'} 
-                              alt="Avatar" 
-                              className="table-avatar-thumb" 
-                            />
+                            {authorInfo.avatar ? (
+                              <img 
+                                src={authorInfo.avatar} 
+                                alt="Avatar" 
+                                className="table-avatar-thumb" 
+                              />
+                            ) : (
+                              <span className="card-author-avatar-placeholder" style={{ width: '28px', height: '28px', fontSize: '0.75rem' }}>
+                                👤
+                              </span>
+                            )}
                             <div>
-                              <span>{authorName}</span>
-                              {isAnon && (
+                              <span className={authorInfo.isDeleted ? 'author-deleted' : ''}>
+                                {authorInfo.name}
+                              </span>
+                              {authorInfo.isAnonymous && (
                                 <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-warning)' }}>
                                   (Marcado Anónimo)
                                 </span>
@@ -339,7 +348,14 @@ export default function Dashboard() {
                           </div>
                         </td>
                         <td>
-                          <span className="code-badge">👍 {item.votos || 0}</span>
+                          <div className="moderation-votes-grid">
+                            <span className="vote-metric-pill like-metric" title="Total de Likes">
+                              👍 {likesCount}
+                            </span>
+                            <span className="vote-metric-pill dislike-metric" title="Total de Dislikes">
+                              👎 {dislikesCount}
+                            </span>
+                          </div>
                         </td>
                         <td>
                           <span className={`status-badge status-${statusNorm}`}>
@@ -472,7 +488,7 @@ export default function Dashboard() {
                       </td>
                       <td>
                         <span className={`badge-role-pill role-${p.rol}`}>
-                          {p.rol}
+                          {formatRole(p.rol)}
                         </span>
                       </td>
                       <td>{p.correo}</td>

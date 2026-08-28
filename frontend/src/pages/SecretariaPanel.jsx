@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { validateEcuadorianCedula } from '../utils/api';
+import { validateEcuadorianCedula, formatRole } from '../utils/api';
 import './Pages.css';
 
 const COURSE_OPTIONS = [
@@ -411,7 +411,7 @@ export default function SecretariaPanel() {
                       </td>
                       <td>
                         <span className={`badge-role-pill role-${p.rol}`}>
-                          {p.rol}
+                          {formatRole(p.rol)}
                         </span>
                       </td>
                       <td>{p.correo}</td>
@@ -652,7 +652,7 @@ export default function SecretariaPanel() {
                         <td>{item.nombre}</td>
                         <td>{item.correo}</td>
                         <td>{item.curso}</td>
-                        <td><span className="badge-role-pill role-alumno">{item.rol}</span></td>
+                        <td><span className="badge-role-pill role-alumno">{formatRole(item.rol)}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -722,11 +722,11 @@ export default function SecretariaPanel() {
                   value={editingUser.rol}
                   onChange={(e) => setEditingUser({ ...editingUser, rol: e.target.value })}
                 >
-                  <option value="alumno">alumno</option>
-                  <option value="profesor">profesor</option>
-                  <option value="mantenimiento">mantenimiento</option>
-                  <option value="secretaria">secretaria</option>
-                  {!isSecretaria && <option value="administrador">administrador</option>}
+                  <option value="alumno">Alumno</option>
+                  <option value="profesor">Profesor</option>
+                  <option value="mantenimiento">Mantenimiento</option>
+                  <option value="secretaria">Secretaria</option>
+                  {!isSecretaria && <option value="administrador">Administrador</option>}
                 </select>
               </div>
 

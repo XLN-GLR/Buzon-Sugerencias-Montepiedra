@@ -4,7 +4,7 @@ trigger: always_on
 
 # Protocolo de Handoff Backend
 
-Cada vez que crees, modifiques o elimines interfaces de usuario, componentes o flujos (o en general, hagas cualquier cambio en el FRONTEND) que requieran persistencia de datos, consumo de APIs o lógica de negocio en el backend, en función del prompt que yo te haya mandado, debes documentar automáticamente los requisitos en el archivo `specs/backend-requirements.md`.
+Cada vez que crees, modifiques o elimines interfaces de usuario, componentes o flujos (o en general, hagas cualquier cambio en el FRONTEND) que requieran persistencia de datos, consumo de APIs o lógica de negocio en el backend, en función del prompt que yo te haya mandado, debes documentar automáticamente los requisitos en el archivo `specs/backend-requirements.md`. Este archivo debe ser subido al repositorio que se esté trabajando junto al resto de archivos.
 
 ## Reglas de Ejecución:
 1. **No sobreescribir ni borrar:** Nunca elimines secciones anteriores ni modifiques tareas marcadas como completadas (`- [x]` o `🟢 Completado`).

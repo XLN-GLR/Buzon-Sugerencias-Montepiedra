@@ -296,15 +296,21 @@ export const api = {
     const isTogglingOff = previousVote === voteType;
     const nextVote = isTogglingOff ? null : voteType;
 
-    let voteDelta = 0;
+    let likeDelta = 0;
+    let dislikeDelta = 0;
+
     if (isTogglingOff) {
-      voteDelta = previousVote === 'like' ? -1 : 0;
+      if (previousVote === 'like') likeDelta = -1;
+      if (previousVote === 'dislike') dislikeDelta = -1;
     } else if (!previousVote) {
-      voteDelta = voteType === 'like' ? 1 : 0;
+      if (voteType === 'like') likeDelta = 1;
+      if (voteType === 'dislike') dislikeDelta = 1;
     } else if (previousVote === 'dislike' && voteType === 'like') {
-      voteDelta = 1;
+      likeDelta = 1;
+      dislikeDelta = -1;
     } else if (previousVote === 'like' && voteType === 'dislike') {
-      voteDelta = -1;
+      likeDelta = -1;
+      dislikeDelta = 1;
     }
 
     // Registrar o remover voto localmente
@@ -340,25 +346,41 @@ export const api = {
 
     // Actualizar conteo local
     const localData = JSON.parse(localStorage.getItem('montepiedra_sugerencias') || '[]');
-    let updatedVotes = 0;
+    let updatedLikes = 0;
+    let updatedDislikes = 0;
+
     const updated = localData.map(item => {
       if (item.id === id) {
         if (backendResult && backendResult.likes !== undefined) {
-          updatedVotes = backendResult.likes;
+          updatedLikes = backendResult.likes;
+          updatedDislikes = backendResult.dislikes !== undefined ? backendResult.dislikes : (item.dislikes || 0);
         } else {
-          const current = item.votos || 0;
-          updatedVotes = Math.max(0, current + voteDelta);
+          const currentLikes = item.likes !== undefined ? item.likes : (item.votos || 0);
+          const currentDislikes = item.dislikes || 0;
+          updatedLikes = Math.max(0, currentLikes + likeDelta);
+          updatedDislikes = Math.max(0, currentDislikes + dislikeDelta);
         }
-        return { ...item, votos: updatedVotes };
+        return { 
+          ...item, 
+          votos: updatedLikes,
+          likes: updatedLikes,
+          dislikes: updatedDislikes,
+          user_vote: nextVote
+        };
       }
       return item;
     });
     localStorage.setItem('montepiedra_sugerencias', JSON.stringify(updated));
 
+    const finalLikes = backendResult?.likes !== undefined ? backendResult.likes : updatedLikes;
+    const finalDislikes = backendResult?.dislikes !== undefined ? backendResult.dislikes : updatedDislikes;
+
     return {
       success: true,
       id,
-      votos: backendResult?.likes !== undefined ? backendResult.likes : updatedVotes,
+      likes: finalLikes,
+      dislikes: finalDislikes,
+      votos: finalLikes,
       currentVote: backendResult?.currentVote !== undefined ? backendResult.currentVote : nextVote
     };
   },
@@ -683,7 +705,7 @@ export const api = {
   }
 };
 
-// Función de validación de cédula ecuatoriana
+// Función de validación de cédula ecuatoriana (Algoritmo del Módulo 10)
 export function validateEcuadorianCedula(cedula) {
   if (!cedula || typeof cedula !== 'string') {
     return { isValid: false, message: 'La cédula es requerida.' };
@@ -692,10 +714,105 @@ export function validateEcuadorianCedula(cedula) {
   if (!/^\d{10}$/.test(clean)) {
     return { isValid: false, message: 'La cédula debe contener exactamente 10 dígitos numéricos (no letras ni guiones).' };
   }
+
+  // Código de provincia (primeros 2 dígitos entre 01 y 24, o 30 para extranjeros/especiales)
   const province = parseInt(clean.substring(0, 2), 10);
-  if (province < 1 || province > 24) {
+  if ((province < 1 || province > 24) && province !== 30) {
     return { isValid: false, message: 'Código de provincia inválido. Los 2 primeros dígitos deben estar entre 01 y 24.' };
   }
+
+  // Tercer dígito de persona natural debe ser menor a 6 (0 al 5)
+  const thirdDigit = parseInt(clean.charAt(2), 10);
+  if (thirdDigit >= 6) {
+    return { isValid: false, message: 'El tercer dígito de la cédula es inválido para personas naturales.' };
+  }
+
+  // Algoritmo Módulo 10
+  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let sum = 0;
+
+  for (let i = 0; i < 9; i++) {
+    let val = parseInt(clean.charAt(i), 10) * coefficients[i];
+    if (val >= 10) {
+      val -= 9;
+    }
+    sum += val;
+  }
+
+  const remainder = sum % 10;
+  const verifierDigit = remainder === 0 ? 0 : 10 - remainder;
+  const lastDigit = parseInt(clean.charAt(9), 10);
+
+  if (verifierDigit !== lastDigit) {
+    return { isValid: false, message: 'Cédula inválida: el décimo dígito verificador no coincide (Algoritmo Módulo 10).' };
+  }
+
   return { isValid: true, message: '' };
 }
+
+// Función helper para capitalizar estrictamente roles de usuario
+export function formatRole(role) {
+  if (!role) return 'Alumno';
+  const r = String(role).trim().toLowerCase();
+  if (r === 'admin' || r === 'administrador') return 'Administrador';
+  if (r === 'profesor' || r === 'docente') return 'Profesor';
+  if (r === 'mantenimiento') return 'Mantenimiento';
+  if (r === 'secretaria' || r === 'secretaría') return 'Secretaria';
+  if (r === 'alumno' || r === 'estudiante') return 'Alumno';
+  return r.charAt(0).toUpperCase() + r.slice(1);
+}
+
+// Helper para determinar autor, anonimato y etiqueta de 'Usuario eliminado'
+export function getAuthorInfo(item, currentUserRole) {
+  if (!item) {
+    return { name: 'Usuario eliminado', isDeleted: true, isAnonymous: false, avatar: null, canInteract: false, authorId: null };
+  }
+
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'administrador';
+  const isAnon = Boolean(item.es_anonimo);
+
+  if (isAnon) {
+    if (isAdmin && item.usuarios?.nombre && item.usuarios.nombre !== 'Anónimo') {
+      return {
+        name: `${item.usuarios.nombre} (Anónimo)`,
+        isDeleted: false,
+        isAnonymous: true,
+        avatar: item.usuarios.foto_url || null,
+        canInteract: true,
+        authorId: item.usuarios.id || item.usuario_id
+      };
+    }
+    return {
+      name: 'Anónimo',
+      isDeleted: false,
+      isAnonymous: true,
+      avatar: null,
+      canInteract: false,
+      authorId: null
+    };
+  }
+
+  const u = item.usuarios;
+  const hasUserObj = Boolean(u && typeof u === 'object');
+  const hasUserId = Boolean(item.usuario_id);
+
+  if (!hasUserObj && !hasUserId) {
+    return { name: 'Usuario eliminado', isDeleted: true, isAnonymous: false, avatar: null, canInteract: false, authorId: null };
+  }
+
+  const name = u?.nombre;
+  if (!name || name === 'Comunidad' || name === 'null' || name.trim() === '') {
+    return { name: 'Usuario eliminado', isDeleted: true, isAnonymous: false, avatar: null, canInteract: false, authorId: null };
+  }
+
+  return {
+    name: name.trim(),
+    isDeleted: false,
+    isAnonymous: false,
+    avatar: u?.foto_url || null,
+    canInteract: true,
+    authorId: u?.id || item.usuario_id
+  };
+}
+
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { api, getAuthorInfo, formatRole } from '../utils/api';
 import './Pages.css';
 
 export default function Board() {
@@ -18,7 +18,7 @@ export default function Board() {
   const [errorMessage, setErrorMessage] = useState('');
   const [votingId, setVotingId] = useState(null);
 
-  // Estados para el Modal de Comentarios
+  // Estados para el Modal Flotante de Detalles y Comentarios Split
   const [activeCommentsSug, setActiveCommentsSug] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -47,9 +47,9 @@ export default function Board() {
     loadSuggestions();
   }, [user]);
 
-  // Manejo de votación con Toggle (desmarcar o cambiar voto)
+  // Manejo de votación con Toggle (desmarcar o cambiar voto) y actualización en tiempo real de Likes y Dislikes
   const handleVote = async (id, voteType, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (!user) return;
 
     setVotingId(id);
@@ -59,11 +59,12 @@ export default function Board() {
     setVotingId(null);
 
     if (result.success) {
+      const newLikes = result.likes !== undefined ? result.likes : (result.votos !== undefined ? result.votos : 0);
+      const newDislikes = result.dislikes !== undefined ? result.dislikes : 0;
+
       setSuggestions(prev => 
         prev.map(s => {
           if (s.id === id) {
-            const newLikes = result.likes !== undefined ? result.likes : (result.votos !== undefined ? result.votos : s.votos);
-            const newDislikes = result.dislikes !== undefined ? result.dislikes : s.dislikes;
             return {
               ...s,
               votos: newLikes,
@@ -75,10 +76,21 @@ export default function Board() {
           return s;
         })
       );
+
+      // Actualizar modal si está abierto para esta sugerencia
+      if (activeCommentsSug && activeCommentsSug.id === id) {
+        setActiveCommentsSug(prev => ({
+          ...prev,
+          votos: newLikes,
+          likes: newLikes,
+          dislikes: newDislikes,
+          user_vote: result.currentVote
+        }));
+      }
     }
   };
 
-  // Abrir modal de comentarios
+  // Abrir modal flotante de detalles y comentarios
   const handleOpenCommentsModal = async (sug, e) => {
     if (e) e.stopPropagation();
     setActiveCommentsSug(sug);
@@ -125,11 +137,11 @@ export default function Board() {
     }
   };
 
-
-  // Redirección al perfil solo si el usuario creador no es anónimo
-  const handleAuthorClick = (authorId, isAnonymous) => {
-    if (!authorId || (isAnonymous && user.rol !== 'administrador' && user.rol !== 'admin')) {
-      return; // Clic deshabilitado para anónimos
+  // Redirección al perfil si el usuario no es anónimo ni eliminado
+  const handleAuthorClick = (authorInfo, e) => {
+    if (e) e.stopPropagation();
+    if (!authorInfo.canInteract || authorInfo.isDeleted || authorInfo.isAnonymous) {
+      return;
     }
     navigate('/perfil');
   };
@@ -137,15 +149,12 @@ export default function Board() {
   // Filtrado y Ordenamiento
   const processedSuggestions = suggestions
     .filter(item => {
-      // Filtro por categoría
       const matchesCategory = filterCategory === 'Todas' || 
         item.categoria.toLowerCase() === filterCategory.toLowerCase();
       
-      // Filtro por estado
       const matchesStatus = filterStatus === 'Todos' || 
         (item.estado || 'Pendiente').toLowerCase().replace(' ', '-') === filterStatus.toLowerCase().replace(' ', '-');
 
-      // Filtro por búsqueda
       const term = searchTerm.toLowerCase();
       const matchesSearch = 
         (item.titulo || '').toLowerCase().includes(term) ||
@@ -155,7 +164,7 @@ export default function Board() {
     })
     .sort((a, b) => {
       if (sortBy === 'votadas') {
-        return (b.votos || 0) - (a.votos || 0);
+        return (b.likes || b.votos || 0) - (a.likes || a.votos || 0);
       }
       
       const dateA = new Date(a.created_at || 0);
@@ -164,7 +173,6 @@ export default function Board() {
       if (sortBy === 'antiguas') {
         return dateA - dateB;
       }
-      // 'recientes' (default)
       return dateB - dateA;
     });
 
@@ -291,26 +299,24 @@ export default function Board() {
             const statusNorm = getStatusNormalized(item.estado);
             const displayDate = item.created_at ? item.created_at.split('T')[0] : '2026-07-08';
             
-            // 2. Renderizado simplificado de usuarios (Directo desde objeto usuarios provisto por API)
-            const authorName = item.usuarios?.nombre || (item.es_anonimo ? 'Anónimo' : 'Comunidad');
-            const authorAvatar = item.usuarios?.foto_url || null;
-            const authorId = item.usuarios?.id || null;
-            const isAnonymous = Boolean(item.es_anonimo);
+            // Renderizado de autor y evaluación de 'Usuario eliminado'
+            const authorInfo = getAuthorInfo(item, user ? user.rol : 'alumno');
             
-            // 3. Control de interacción para autores anónimos
-            const canInteractProfile = authorId !== null && (!isAnonymous || user.rol === 'administrador' || user.rol === 'admin');
-
-            // 4. Votación limitada: consultar voto actual del usuario
+            // Votación: consultar voto actual del usuario y conteos de likes/dislikes
             const userId = user ? (user.usuario_id || user.cedula) : null;
-            const userVote = api.getUserVote(item.id, userId);
+            const userVote = item.user_vote || api.getUserVote(item.id, userId);
+            const likesCount = item.likes !== undefined ? item.likes : (item.votos || 0);
+            const dislikesCount = item.dislikes || 0;
 
-            // 5. Etiqueta dinámica de popularidad
-            const isPopular = (item.votos || 0) >= 5;
+            // Etiqueta dinámica de popularidad
+            const isPopular = likesCount >= 5;
 
             return (
               <div 
                 key={item.id || item.created_at} 
-                className={`suggestion-card ${statusNorm}`}
+                className={`suggestion-card clickable-card ${statusNorm}`}
+                onClick={(e) => handleOpenCommentsModal(item, e)}
+                title="Haz clic para ver detalles completos y comentarios de la propuesta"
               >
                 <div>
                   {/* Top Badges (Categoría, Popularidad, Estado) */}
@@ -355,13 +361,13 @@ export default function Board() {
                   <div className="card-footer-toolbar">
                     {/* Sección de Autor y Avatar */}
                     <div 
-                      className={`card-author-section ${canInteractProfile ? 'clickable' : 'anonymous-author'}`}
-                      onClick={() => handleAuthorClick(authorId, isAnonymous)}
-                      title={canInteractProfile ? `Ver perfil de ${authorName}` : (isAnonymous ? 'Propuesta anónima' : '')}
+                      className={`card-author-section ${authorInfo.canInteract && !authorInfo.isDeleted ? 'clickable' : 'anonymous-author'}`}
+                      onClick={(e) => handleAuthorClick(authorInfo, e)}
+                      title={authorInfo.canInteract && !authorInfo.isDeleted ? `Ver perfil de ${authorInfo.name}` : ''}
                     >
-                      {authorAvatar ? (
+                      {authorInfo.avatar ? (
                         <img 
-                          src={authorAvatar} 
+                          src={authorInfo.avatar} 
                           alt="Avatar" 
                           className="card-author-avatar" 
                           onError={(e) => {
@@ -372,15 +378,14 @@ export default function Board() {
                       ) : null}
                       <span 
                         className="card-author-avatar-placeholder" 
-                        style={{ display: authorAvatar ? 'none' : 'flex' }}
+                        style={{ display: authorInfo.avatar ? 'none' : 'flex' }}
                       >
                         👤
                       </span>
                       <span>
                         Por:{' '}
-                        <strong className={`card-author ${isAnonymous && (user.rol === 'admin' || user.rol === 'administrador') ? 'revealed-author' : ''}`}>
-                          {authorName}
-                          {isAnonymous && (user.rol === 'admin' || user.rol === 'administrador') && ' (Anónimo)'}
+                        <strong className={`card-author ${authorInfo.isDeleted ? 'author-deleted' : ''}`}>
+                          {authorInfo.name}
                         </strong>
                       </span>
                     </div>
@@ -395,7 +400,7 @@ export default function Board() {
                           disabled={votingId === item.id}
                         >
                           <span className="vote-icon">👍</span>
-                          <span className="vote-count">{item.votos || 0}</span>
+                          <span className="vote-count">{likesCount}</span>
                         </button>
 
                         <button 
@@ -405,16 +410,16 @@ export default function Board() {
                           disabled={votingId === item.id}
                         >
                           <span className="vote-icon">👎</span>
-                          <span className="vote-count">{item.dislikes || 0}</span>
+                          <span className="vote-count">{dislikesCount}</span>
                         </button>
 
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                           onClick={(e) => handleOpenCommentsModal(item, e)}
-                          title="Ver y añadir comentarios a esta propuesta"
+                          title="Ver detalles completos y añadir comentarios"
                         >
-                          💬 Comentar
+                          💬 Detalle
                         </button>
                       </div>
 
@@ -428,77 +433,172 @@ export default function Board() {
         </div>
       )}
 
-      {/* MODAL FLOTANTE DE COMENTARIOS (ESTILO RED SOCIAL) */}
-      {activeCommentsSug && (
-        <div className="modal-backdrop" onClick={() => setActiveCommentsSug(null)}>
-          <div className="modal-content animate-fadeIn" style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2>💬 Comentarios Comunitarios</h2>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                  Propuesta: <strong>"{activeCommentsSug.titulo}"</strong>
-                </p>
+      {/* MODAL FLOTANTE DE DETALLES Y COMENTARIOS (SPLIT SCREEN CON BACKDROP BLUR) */}
+      {activeCommentsSug && (() => {
+        const modalAuthor = getAuthorInfo(activeCommentsSug, user ? user.rol : 'alumno');
+        const modalUserVote = activeCommentsSug.user_vote || (user ? api.getUserVote(activeCommentsSug.id, user.usuario_id || user.cedula) : null);
+        const modalLikes = activeCommentsSug.likes !== undefined ? activeCommentsSug.likes : (activeCommentsSug.votos || 0);
+        const modalDislikes = activeCommentsSug.dislikes || 0;
+        const modalStatusNorm = getStatusNormalized(activeCommentsSug.estado);
+
+        return (
+          <div className="modal-backdrop floating-detail-backdrop" onClick={() => setActiveCommentsSug(null)}>
+            <div className="modal-content split-detail-modal animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+              
+              {/* Encabezado del Modal */}
+              <div className="modal-header split-modal-header">
+                <div>
+                  <span className={`badge badge-${(activeCommentsSug.categoria || 'otros').toLowerCase()}`} style={{ marginRight: '0.5rem' }}>
+                    {getCategoryLabel(activeCommentsSug.categoria)}
+                  </span>
+                  <span className={`status-badge status-${modalStatusNorm}`}>
+                    {activeCommentsSug.estado || 'Pendiente'}
+                  </span>
+                </div>
+                <button className="modal-close" onClick={() => setActiveCommentsSug(null)}>✕</button>
               </div>
-              <button className="modal-close" onClick={() => setActiveCommentsSug(null)}>✕</button>
-            </div>
 
-            <div className="comments-modal-body" style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem', marginBottom: '1.25rem' }}>
-              {commentsLoading ? (
-                <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                  <div className="spinner"></div>
-                  <p>Cargando comentarios...</p>
-                </div>
-              ) : comments.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
-                  <p>💬 No hay comentarios aún. ¡Sé el primero en aportar a esta propuesta!</p>
-                </div>
-              ) : (
-                comments.map((com, index) => {
-                  const authorName = com.usuarios?.nombre || com.nombre || 'Comunidad Montepiedra';
-                  const authorAvatar = com.usuarios?.foto_url || com.foto_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(authorName)}`;
-                  const displayDate = com.created_at ? new Date(com.created_at).toLocaleString() : 'Reciente';
-
-                  return (
-                    <div key={com.id || index} style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', padding: '0.75rem 1rem', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                      <img src={authorAvatar} alt={authorName} style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                          <strong style={{ fontSize: '0.875rem', color: 'var(--color-primary)' }}>{authorName}</strong>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{displayDate}</span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text)', lineHeight: '1.4' }}>{com.texto}</p>
-                      </div>
+              {/* Cuerpo Split: Izquierda Detalles, Derecha Comentarios */}
+              <div className="split-modal-body">
+                
+                {/* COLUMNA IZQUIERDA: Detalles de la Sugerencia */}
+                <div className="split-pane-left">
+                  <h2 className="split-sug-title">{activeCommentsSug.titulo}</h2>
+                  
+                  {/* Autor y Fecha */}
+                  <div className="split-author-box">
+                    {modalAuthor.avatar ? (
+                      <img src={modalAuthor.avatar} alt="Avatar" className="card-author-avatar" />
+                    ) : (
+                      <span className="card-author-avatar-placeholder">👤</span>
+                    )}
+                    <div>
+                      <strong className={modalAuthor.isDeleted ? 'author-deleted' : ''}>
+                        {modalAuthor.name}
+                      </strong>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                        Fecha: {activeCommentsSug.created_at ? activeCommentsSug.created_at.split('T')[0] : 'Reciente'}
+                      </span>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  </div>
 
-            {commentError && (
-              <div className="alert-banner alert-error" style={{ marginBottom: '1rem' }}>
-                <span>🛑</span>
-                <span>{commentError}</span>
+                  {/* Descripción completa */}
+                  <div className="split-sug-desc-container">
+                    <h4>Descripción de la Propuesta:</h4>
+                    <p className="split-sug-desc">{activeCommentsSug.descripcion}</p>
+                  </div>
+
+                  {/* Imagen adjunta si existe */}
+                  {activeCommentsSug.foto_url && (
+                    <div className="split-image-container">
+                      <img src={activeCommentsSug.foto_url} alt={activeCommentsSug.titulo} className="split-sug-image" />
+                    </div>
+                  )}
+
+                  {/* Respuesta oficial de Moderación si existe */}
+                  {activeCommentsSug.respuesta_moderador && (
+                    <div className="card-response" style={{ marginTop: '1rem' }}>
+                      <div className="response-header">
+                        <span>💬</span> Respuesta Institucional:
+                      </div>
+                      <p className="response-text">"{activeCommentsSug.respuesta_moderador}"</p>
+                    </div>
+                  )}
+
+                  {/* Botones Interactivos de Votación */}
+                  <div className="split-voting-bar">
+                    <span>¿Qué opinas de esta sugerencia?</span>
+                    <div className="vote-buttons-group">
+                      <button 
+                        className={`vote-btn like-btn ${modalUserVote === 'like' ? 'active-like' : ''}`}
+                        onClick={(e) => handleVote(activeCommentsSug.id, 'like', e)}
+                        disabled={votingId === activeCommentsSug.id}
+                      >
+                        <span className="vote-icon">👍</span>
+                        <span className="vote-count">{modalLikes} Likes</span>
+                      </button>
+
+                      <button 
+                        className={`vote-btn dislike-btn ${modalUserVote === 'dislike' ? 'active-dislike' : ''}`}
+                        onClick={(e) => handleVote(activeCommentsSug.id, 'dislike', e)}
+                        disabled={votingId === activeCommentsSug.id}
+                      >
+                        <span className="vote-icon">👎</span>
+                        <span className="vote-count">{modalDislikes} Dislikes</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMNA DERECHA: Sistema de Comentarios */}
+                <div className="split-pane-right">
+                  <h3 className="comments-pane-title">💬 Comentarios Comunitarios ({comments.length})</h3>
+
+                  <div className="comments-list-scroll">
+                    {commentsLoading ? (
+                      <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                        <div className="spinner"></div>
+                        <p>Cargando comentarios...</p>
+                      </div>
+                    ) : comments.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
+                        <p>💬 No hay comentarios aún. ¡Sé el primero en aportar a esta propuesta!</p>
+                      </div>
+                    ) : (
+                      comments.map((com, index) => {
+                        const authorName = com.usuarios?.nombre || com.nombre || 'Comunidad Montepiedra';
+                        const authorRole = com.usuarios?.rol || com.rol;
+                        const authorAvatar = com.usuarios?.foto_url || com.foto_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(authorName)}`;
+                        const displayDate = com.created_at ? new Date(com.created_at).toLocaleString() : 'Reciente';
+
+                        return (
+                          <div key={com.id || index} className="comment-item-card">
+                            <img src={authorAvatar} alt={authorName} className="comment-avatar" />
+                            <div className="comment-body">
+                              <div className="comment-header">
+                                <strong className="comment-author-name">{authorName}</strong>
+                                {authorRole && (
+                                  <span className={`badge-role-pill role-${authorRole}`} style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
+                                    {formatRole(authorRole)}
+                                  </span>
+                                )}
+                                <span className="comment-date">{displayDate}</span>
+                              </div>
+                              <p className="comment-text">{com.texto}</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {commentError && (
+                    <div className="alert-banner alert-error" style={{ marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                      <span>🛑</span>
+                      <span>{commentError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handlePostComment} className="comment-post-form">
+                    <input
+                      type="text"
+                      placeholder="Escribe un comentario respetuoso..."
+                      value={newCommentText}
+                      onChange={(e) => setNewCommentText(e.target.value)}
+                      disabled={commentSubmitting}
+                      required
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={commentSubmitting || !newCommentText.trim()}>
+                      {commentSubmitting ? '...' : 'Enviar 🚀'}
+                    </button>
+                  </form>
+                </div>
+
               </div>
-            )}
-
-            <form onSubmit={handlePostComment} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Escribe un comentario respetuoso..."
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
-                disabled={commentSubmitting}
-                required
-                style={{ flex: 1 }}
-              />
-              <button type="submit" className="btn btn-primary" disabled={commentSubmitting || !newCommentText.trim()}>
-                {commentSubmitting ? 'Enviando...' : 'Enviar 🚀'}
-              </button>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
-
