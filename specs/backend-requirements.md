@@ -1,7 +1,7 @@
 # Requisitos de Backend - Buzón de Sugerencias Montepiedra
 
 ## [2026-08-28] Correcciones de Votación, Modal Split de Comentarios y Moderación
-**Estado:** 🟡 Pendiente
+**Estado:** 🟢 Completado
 
 ### Contexto de UI
 Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `SecretariaPanel.jsx`, `Login.jsx`) para:
@@ -13,7 +13,7 @@ Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `Secretar
 6. Alineación en cuadrícula Flexbox/Grid de las métricas separadas de Likes y Dislikes en el Panel de Moderación.
 
 ### Endpoints solicitados
-- [ ] `POST /sugerencias/:id/votar`
+- [x] `POST /sugerencias/:id/votar`
   - **Params / Query:** `id` (string, Path param - ID de la sugerencia)
   - **Request Body:**
     ```json
@@ -34,7 +34,7 @@ Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `Secretar
     }
     ```
 
-- [ ] `GET /sugerencias/:id/comentarios`
+- [x] `GET /sugerencias/:id/comentarios`
   - **Params / Query:** `id` (string, Path param)
   - **Headers:** `x-user-role: alumno`
   - **Response esperada:**
@@ -58,7 +58,7 @@ Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `Secretar
     }
     ```
 
-- [ ] `POST /sugerencias/:id/comentarios`
+- [x] `POST /sugerencias/:id/comentarios`
   - **Params / Query:** `id` (string, Path param)
   - **Headers:** `x-user-role: alumno`
   - **Request Body:**
@@ -83,6 +83,6 @@ Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `Secretar
     ```
 
 ### Cambios en Base de Datos sugeridos
-- [ ] Asegurar que la tabla `sugerencias` cuente con la columna `dislikes` (INTEGER DEFAULT 0) e `likes` (INTEGER DEFAULT 0) además de `votos`.
-- [ ] Garantizar la relación `FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL` para que la eliminación de un usuario preserve las sugerencias con `usuarios = null` (permitiendo renderizar 'Usuario eliminado' en el frontend).
-- [ ] Crear la tabla `comentarios_sugerencias` con columnas `(id, sugerencia_id, usuario_id, texto, created_at)`.
+- [x] Asegurar que la tabla `sugerencias` cuente con la columna `dislikes` (INTEGER DEFAULT 0) e `likes` (INTEGER DEFAULT 0) además de `votos`.
+- [x] Garantizar la relación `FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL` para que la eliminación de un usuario preserve las sugerencias con `usuarios = null` (permitiendo renderizar 'Usuario eliminado' en el frontend).
+- [x] Crear la tabla `comentarios_sugerencias` con columnas `(id, sugerencia_id, usuario_id, texto, created_at)`.
