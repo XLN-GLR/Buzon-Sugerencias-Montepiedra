@@ -6,19 +6,19 @@ const AuthContext = createContext();
 // Cuentas oficiales requeridas con formatos estrictos de correo institucional
 const INITIAL_PROFILES = [
   {
-    usuario_id: '60685e1f-3d41-42c2-b9a6-d71739856b22',
-    cedula: '0923456784',
-    nombre: 'Daniel Mendoza',
+    usuario_id: '1190e727-a34a-4e8b-b7ea-310acd516904',
+    cedula: '0950130260',
+    nombre: 'Daniel Mendoza Morales',
     rol: 'alumno',
-    correo: 'daniel@alumno.montepiedra.edu.ec',
+    correo: 'daniel.mendoza@alumno.montepiedra.edu.ec',
     curso: '2do de Bachillerato',
     avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Daniel',
-    isFirstLogin: true,
-    password: null // No configurada todavía
+    isFirstLogin: false,
+    password: 'alumno'
   },
   {
-    usuario_id: 'd798a3e4-8cf1-4509-bc01-e24df234a9f9',
-    cedula: '0911223345',
+    usuario_id: 'd30c8b5c-87ec-477e-987d-4d6842c3f611',
+    cedula: '0917240327',
     nombre: 'Ing. Mauricio Ramos',
     rol: 'administrador',
     correo: 'admin@montepiedra.edu.ec',
@@ -28,8 +28,8 @@ const INITIAL_PROFILES = [
     password: 'admin'
   },
   {
-    usuario_id: '91ab8e1f-3d41-42c2-b9a6-d71739856c44',
-    cedula: '0955667787',
+    usuario_id: 'ae203d0f-9fcf-4143-8260-2f9239504dc7',
+    cedula: '0923456784',
     nombre: 'Dr. Gabriel Villalba',
     rol: 'profesor',
     correo: 'profesor@montepiedra.edu.ec',
@@ -39,20 +39,20 @@ const INITIAL_PROFILES = [
     password: 'profesor'
   },
   {
-    usuario_id: '45607e1f-1a2b-3c4d-5e6f-789012345678',
-    cedula: '0933445561',
+    usuario_id: 'a36ace40-53f0-4f5c-96d4-bb556e43c8cc',
+    cedula: '0930816400',
     nombre: 'Sr. Roberto Gómez',
     rol: 'mantenimiento',
     correo: 'mantenimiento@montepiedra.edu.ec',
     curso: 'N/A',
     avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Roberto',
-    isFirstLogin: true,
-    password: null
+    isFirstLogin: false,
+    password: 'mantenimiento'
   },
   {
-    usuario_id: '78901e1f-2b3c-4d5e-6f7a-890123456789',
-    cedula: '0944556679',
-    nombre: 'Lcda. Patricia Salinas',
+    usuario_id: '11d933be-d67b-4fe5-93c8-0ba99d1c2070',
+    cedula: '0950764043',
+    nombre: 'Lcda. Elizabeth Ponce',
     rol: 'secretaria',
     correo: 'secretaria@montepiedra.edu.ec',
     curso: 'N/A',
@@ -61,26 +61,15 @@ const INITIAL_PROFILES = [
     password: 'secretaria'
   },
   {
-    usuario_id: '71796f2a-4e52-53d3-c0b7-e82840967c33',
-    cedula: '0987654324',
-    nombre: 'Juan Pérez',
+    usuario_id: 'b345701f-b00a-47f6-a5fc-ed6e72074bdf',
+    cedula: '0940123458',
+    nombre: 'Isaac Alfredo Izurieta',
     rol: 'alumno',
-    correo: 'juan.perez@alumno.montepiedra.edu.ec',
+    correo: 'iizurieta@alumno.montepiedra.edu.ec',
     curso: '10mo de Básica',
-    avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan',
-    isFirstLogin: false,
-    password: '0987654324'
-  },
-  {
-    usuario_id: '82807g3b-5f63-64e4-d1c8-f93951078d44',
-    cedula: '0977889906',
-    nombre: 'Pedro Gómez',
-    rol: 'alumno',
-    correo: 'pedro.gomez@alumno.montepiedra.edu.ec',
-    curso: '8vo de Básica',
-    avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Pedro',
-    isFirstLogin: false,
-    password: '0977889906'
+    avatar: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Isaac',
+    isFirstLogin: true,
+    password: null
   }
 ];
 

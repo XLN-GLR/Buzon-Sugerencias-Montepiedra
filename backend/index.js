@@ -48,6 +48,48 @@ const hasProfanity = (text) => {
   return FORBIDDEN_WORDS.some(word => lower.includes(word));
 };
 
+// Función para validar cédula ecuatoriana según el algoritmo de Módulo 10
+const validateEcuadorianCedula = (cedula) => {
+  if (!cedula || typeof cedula !== 'string') {
+    return { isValid: false, message: "El campo 'cedula' es obligatorio y debe ser una cadena." };
+  }
+  const clean = cedula.trim();
+  if (!/^\d{10}$/.test(clean)) {
+    return { isValid: false, message: "La cédula debe contener exactamente 10 dígitos numéricos (no letras ni guiones)." };
+  }
+
+  const province = parseInt(clean.substring(0, 2), 10);
+  if ((province < 1 || province > 24) && province !== 30) {
+    return { isValid: false, message: "Código de provincia inválido. Los 2 primeros dígitos deben estar entre 01 y 24." };
+  }
+
+  const thirdDigit = parseInt(clean.charAt(2), 10);
+  if (thirdDigit >= 6) {
+    return { isValid: false, message: "El tercer dígito de la cédula es inválido para personas naturales." };
+  }
+
+  const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let sum = 0;
+
+  for (let i = 0; i < 9; i++) {
+    let val = parseInt(clean.charAt(i), 10) * coefficients[i];
+    if (val >= 10) {
+      val -= 9;
+    }
+    sum += val;
+  }
+
+  const remainder = sum % 10;
+  const verifierDigit = remainder === 0 ? 0 : 10 - remainder;
+  const lastDigit = parseInt(clean.charAt(9), 10);
+
+  if (verifierDigit !== lastDigit) {
+    return { isValid: false, message: "Cédula inválida: el décimo dígito verificador no coincide (Algoritmo Módulo 10)." };
+  }
+
+  return { isValid: true, message: "" };
+};
+
 // =======================================================
 // MÓDULO 2: BUZÓN DE SUGERENCIAS Y VOTACIONES
 // =======================================================
@@ -622,6 +664,13 @@ app.post('/usuarios/registro-masivo', async (req, res) => {
         error: `El usuario en la posición ${i + 1} no cuenta con todos los campos obligatorios ('cedula', 'nombre', 'correo').`
       });
     }
+
+    const cedulaVal = validateEcuadorianCedula(String(item.cedula));
+    if (!cedulaVal.isValid) {
+      return res.status(400).json({
+        error: `Cédula inválida para el usuario en la posición ${i + 1} (${item.nombre || 'N/A'}): ${cedulaVal.message}`
+      });
+    }
   }
 
   try {
@@ -684,6 +733,13 @@ app.post('/usuarios', async (req, res) => {
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
       error: "El campo 'cedula' es obligatorio."
+    });
+  }
+
+  const cedulaVal = validateEcuadorianCedula(cedula);
+  if (!cedulaVal.isValid) {
+    return res.status(400).json({
+      error: cedulaVal.message
     });
   }
 
@@ -864,7 +920,15 @@ app.put('/usuarios/:id', async (req, res) => {
     
     // Modificaciones administrativas restringidas
     if (isAdminOrSecretaria) {
-      if (cedula !== undefined) updatePayload.cedula = String(cedula).trim();
+      if (cedula !== undefined) {
+        const cedulaVal = validateEcuadorianCedula(String(cedula));
+        if (!cedulaVal.isValid) {
+          return res.status(400).json({
+            error: cedulaVal.message
+          });
+        }
+        updatePayload.cedula = String(cedula).trim();
+      }
       if (rol !== undefined) updatePayload.rol = String(rol).trim().toLowerCase();
     }
 
@@ -958,6 +1022,13 @@ app.post('/auth/login', async (req, res) => {
     });
   }
 
+  const cedulaVal = validateEcuadorianCedula(cedula);
+  if (!cedulaVal.isValid) {
+    return res.status(400).json({
+      error: cedulaVal.message
+    });
+  }
+
   try {
     const { data: usuario, error: fetchError } = await supabase
       .from('usuarios')
@@ -1044,6 +1115,13 @@ app.post('/auth/primer-ingreso', async (req, res) => {
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
       error: "El campo 'cedula' es obligatorio."
+    });
+  }
+
+  const cedulaVal = validateEcuadorianCedula(cedula);
+  if (!cedulaVal.isValid) {
+    return res.status(400).json({
+      error: cedulaVal.message
     });
   }
 

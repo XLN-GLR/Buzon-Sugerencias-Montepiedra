@@ -86,3 +86,93 @@ Se actualizaron las vistas del frontend (`Board.jsx`, `Dashboard.jsx`, `Secretar
 - [x] Asegurar que la tabla `sugerencias` cuente con la columna `dislikes` (INTEGER DEFAULT 0) e `likes` (INTEGER DEFAULT 0) además de `votos`.
 - [x] Garantizar la relación `FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL` para que la eliminación de un usuario preserve las sugerencias con `usuarios = null` (permitiendo renderizar 'Usuario eliminado' en el frontend).
 - [x] Crear la tabla `comentarios_sugerencias` con columnas `(id, sugerencia_id, usuario_id, texto, created_at)`.
+
+---
+
+## [2026-08-28] Validación Estricta de Cédula Ecuatoriana (Módulo 10) y Reinicio de Datos
+**Estado:** 🟢 Completado
+
+### Contexto de UI
+Se reforzó la validación del décimo dígito validador de la cédula ecuatoriana en el formulario de inicio de sesión (`Login.jsx`) y el panel de secretaría (`SecretariaPanel.jsx`), y se actualizaron las credenciales rápidas de prueba y nómina demo con cédulas válidas.
+
+### Endpoints solicitados
+- [x] `POST /auth/login`
+  - **Params / Query:** Ninguno
+  - **Request Body:**
+    ```json
+    {
+      "cedula": "0917240327",
+      "password": "admin"
+    }
+    ```
+  - **Response esperada (400 Bad Request en caso de cédula inválida):**
+    ```json
+    {
+      "error": "Cédula inválida: el décimo dígito verificador no coincide (Algoritmo Módulo 10)."
+    }
+    ```
+
+- [x] `POST /auth/primer-ingreso`
+  - **Params / Query:** Ninguno
+  - **Request Body:**
+    ```json
+    {
+      "cedula": "0940123458",
+      "nueva_password": "nuevaPasswordSegura123",
+      "conservar_cedula": false
+    }
+    ```
+  - **Response esperada:**
+    ```json
+    {
+      "message": "Contraseña configurada exitosamente. Ya puede iniciar sesión.",
+      "usuario": { "id": "...", "cedula": "0940123458" }
+    }
+    ```
+
+- [x] `POST /usuarios`
+  - **Headers:** `x-user-role: secretaria`
+  - **Request Body:**
+    ```json
+    {
+      "cedula": "0950764043",
+      "nombre": "Lcda. Elizabeth Ponce",
+      "correo": "secretaria@montepiedra.edu.ec",
+      "rol": "secretaria"
+    }
+    ```
+  - **Response esperada:**
+    ```json
+    {
+      "message": "Usuario registrado exitosamente",
+      "usuario": { "id": "...", "cedula": "0950764043" }
+    }
+    ```
+
+- [x] `POST /usuarios/registro-masivo`
+  - **Headers:** `x-user-role: secretaria`
+  - **Request Body:**
+    ```json
+    {
+      "nomina": [
+        {
+          "cedula": "0921122339",
+          "nombre": "Alejandro Morales",
+          "correo": "alejandro.morales@alumno.montepiedra.edu.ec",
+          "rol": "alumno"
+        }
+      ]
+    }
+    ```
+  - **Response esperada:**
+    ```json
+    {
+      "message": "Nómina de usuarios registrada exitosamente",
+      "total_registrados": 1,
+      "usuarios": [ { "id": "...", "cedula": "0921122339" } ]
+    }
+    ```
+
+### Cambios en Base de Datos sugeridos
+- [x] Limpieza en tabla `usuarios` eliminando registros cuyas cédulas no cumplan con el algoritmo oficial de validación del Módulo 10.
+- [x] Siembra de usuarios iniciales limpios con cédulas reales y válidas para cada rol institucional ('admin', 'secretaria', 'mantenimiento', 'profesor', 'alumno') con sus respectivos hashes de bcrypt.

@@ -179,10 +179,10 @@ export default function SecretariaPanel() {
       if (parsed.length === 0) {
         // Generar plantilla de demostración si el archivo estaba vacío
         const sampleDemo = [
-          { cedula: '0981122334', nombre: 'Alejandro Morales', correo: 'alejandro.morales@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato', rol: 'alumno' },
-          { cedula: '0982233445', nombre: 'Valeria Castro', correo: 'valeria.castro@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato', rol: 'alumno' },
-          { cedula: '0983344556', nombre: 'Mateo Benítez', correo: 'mateo.benitez@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato', rol: 'alumno' },
-          { cedula: '0984455667', nombre: 'Camila Villacís', correo: 'camila.villacis@alumno.montepiedra.edu.ec', curso: '10mo de Básica', rol: 'alumno' }
+          { cedula: '0921122339', nombre: 'Alejandro Morales', correo: 'alejandro.morales@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato', rol: 'alumno' },
+          { cedula: '0922233440', nombre: 'Valeria Castro', correo: 'valeria.castro@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato', rol: 'alumno' },
+          { cedula: '0923344550', nombre: 'Mateo Benítez', correo: 'mateo.benitez@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato', rol: 'alumno' },
+          { cedula: '0924455660', nombre: 'Camila Villacís', correo: 'camila.villacis@alumno.montepiedra.edu.ec', curso: '10mo de Básica', rol: 'alumno' }
         ];
         setParsedPreview(sampleDemo);
         showAlert('info', 'Archivo cargado. Se detectaron 4 registros válidos para importar.');
@@ -213,11 +213,11 @@ export default function SecretariaPanel() {
   const loadDemoFile = () => {
     setSelectedFileName('Nomina_Estudiantes_2026_Montepiedra.xlsx');
     setParsedPreview([
-      { cedula: '0985511223', nombre: 'Sebastián Aguirre', correo: 'sebastian.aguirre@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato A', rol: 'alumno' },
-      { cedula: '0986622334', nombre: 'Fernanda Ortiz', correo: 'fernanda.ortiz@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato B', rol: 'alumno' },
-      { cedula: '0987733445', nombre: 'Esteban Carrera', correo: 'esteban.carrera@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato A', rol: 'alumno' },
-      { cedula: '0988844556', nombre: 'Andrea Noboa', correo: 'andrea.noboa@alumno.montepiedra.edu.ec', curso: '10mo de Básica C', rol: 'alumno' },
-      { cedula: '0989955667', nombre: 'Ignacio Larrea', correo: 'ignacio.larrea@alumno.montepiedra.edu.ec', curso: '9no de Básica A', rol: 'alumno' }
+      { cedula: '0925511222', nombre: 'Sebastián Aguirre', correo: 'sebastian.aguirre@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato A', rol: 'alumno' },
+      { cedula: '0926622333', nombre: 'Fernanda Ortiz', correo: 'fernanda.ortiz@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato B', rol: 'alumno' },
+      { cedula: '0927733444', nombre: 'Esteban Carrera', correo: 'esteban.carrera@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato A', rol: 'alumno' },
+      { cedula: '0928844554', nombre: 'Andrea Noboa', correo: 'andrea.noboa@alumno.montepiedra.edu.ec', curso: '10mo de Básica C', rol: 'alumno' },
+      { cedula: '0929955664', nombre: 'Ignacio Larrea', correo: 'ignacio.larrea@alumno.montepiedra.edu.ec', curso: '9no de Básica A', rol: 'alumno' }
     ]);
   };
 

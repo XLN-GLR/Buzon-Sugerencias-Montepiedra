@@ -24,11 +24,11 @@ export default function Login() {
 
   // Lista de credenciales de prueba para facilitar evaluación (con Cédulas Módulo 10 Válidas)
   const testAccounts = [
-    { role: 'Alumno', name: 'Daniel Mendoza', cedula: '0923456784', email: 'daniel@alumno.montepiedra.edu.ec', icon: '🎓' },
-    { role: 'Administrador', name: 'Ing. Mauricio Ramos', cedula: '0911223345', email: 'admin@montepiedra.edu.ec', icon: '🛡️' },
-    { role: 'Profesor', name: 'Dr. Gabriel Villalba', cedula: '0955667787', email: 'profesor@montepiedra.edu.ec', icon: '👨‍🏫' },
-    { role: 'Mantenimiento', name: 'Sr. Roberto Gómez', cedula: '0933445561', email: 'mantenimiento@montepiedra.edu.ec', icon: '🔨' },
-    { role: 'Secretaría', name: 'Lcda. Patricia Salinas', cedula: '0944556679', email: 'secretaria@montepiedra.edu.ec', icon: '📑' }
+    { role: 'Alumno', name: 'Daniel Mendoza', cedula: '0950130260', email: 'daniel.mendoza@alumno.montepiedra.edu.ec', icon: '🎓' },
+    { role: 'Administrador', name: 'Ing. Mauricio Ramos', cedula: '0917240327', email: 'admin@montepiedra.edu.ec', icon: '🛡️' },
+    { role: 'Profesor', name: 'Dr. Gabriel Villalba', cedula: '0923456784', email: 'profesor@montepiedra.edu.ec', icon: '👨‍🏫' },
+    { role: 'Mantenimiento', name: 'Sr. Roberto Gómez', cedula: '0930816400', email: 'mantenimiento@montepiedra.edu.ec', icon: '🔨' },
+    { role: 'Secretaría', name: 'Lcda. Elizabeth Ponce', cedula: '0950764043', email: 'secretaria@montepiedra.edu.ec', icon: '📑' }
   ];
 
   // Manejador de cambio en input de Cédula
