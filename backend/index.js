@@ -728,7 +728,7 @@ app.post('/usuarios', async (req, res) => {
     });
   }
 
-  const { cedula, nombre, correo, rol, foto_url } = req.body;
+  const { cedula, nombre, correo, rol, foto_url, es_primer_ingreso } = req.body;
 
   if (!cedula || typeof cedula !== 'string' || !cedula.trim()) {
     return res.status(400).json({
@@ -768,7 +768,7 @@ app.post('/usuarios', async (req, res) => {
           correo: correo.trim(),
           rol: rol ? String(rol).trim().toLowerCase() : 'alumno',
           password: hashedPassword,
-          es_primer_ingreso: true,
+          es_primer_ingreso: es_primer_ingreso !== undefined ? Boolean(es_primer_ingreso) : true,
           foto_url: foto_url ? String(foto_url).trim() : null
         }
       ])
@@ -901,7 +901,7 @@ app.put('/usuarios/:id', async (req, res) => {
   const { id } = req.params;
   const userRole = normalizeRole(req.headers['x-user-role']);
   const requesterId = req.headers['x-user-id'];
-  const { nombre, cedula, correo, rol, foto_url, password } = req.body;
+  const { nombre, cedula, correo, rol, foto_url, password, es_primer_ingreso } = req.body;
 
   const isSelf = requesterId && String(requesterId).trim() === String(id).trim();
   const isAdminOrSecretaria = userRole === 'secretaria' || userRole === 'admin';
@@ -930,6 +930,7 @@ app.put('/usuarios/:id', async (req, res) => {
         updatePayload.cedula = String(cedula).trim();
       }
       if (rol !== undefined) updatePayload.rol = String(rol).trim().toLowerCase();
+      if (es_primer_ingreso !== undefined) updatePayload.es_primer_ingreso = Boolean(es_primer_ingreso);
     }
 
     // Si se pasa contraseña nueva, se cifra
@@ -1164,7 +1165,7 @@ app.post('/auth/primer-ingreso', async (req, res) => {
         es_primer_ingreso: false
       })
       .eq('id', usuario.id)
-      .select('id, cedula, nombre, correo, rol, foto_url, created_at')
+      .select('id, cedula, nombre, correo, rol, foto_url, es_primer_ingreso, created_at')
       .single();
 
     if (updateError) {
