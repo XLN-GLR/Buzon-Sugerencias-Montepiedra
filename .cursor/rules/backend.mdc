@@ -1,0 +1,12 @@
+---
+description: Reglas de desarrollo para el backend del Buzón de Sugerencias Montepiedra
+globs: backend/**/*
+---
+
+# Reglas del Backend - Buzón de Sugerencias Montepiedra
+
+1. **Exclusividad de Backend:** Modificar únicamente archivos dentro de `backend/`. No alterar `frontend/`.
+2. **Integridad de Código:** Mantener la lógica de negocio y contratos de API existentes en `backend/index.js` y `backend/CONTRATO_DATOS.md`.
+3. **Seguridad y Cédula:** Validar obligatoriamente las cédulas con el algoritmo de Módulo 10 y aplicar filtro de palabras no permitidas.
+4. **Cero Exposición de Secretos:** No almacenar claves de Supabase ni contraseñas en código; utilizar variables de entorno cargadas desde `.env`.
+5. **Cifrado:** Usar siempre `bcrypt` para contraseñas de usuarios.
