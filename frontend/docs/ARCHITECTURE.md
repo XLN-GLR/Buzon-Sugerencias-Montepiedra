@@ -62,8 +62,6 @@ frontend/
 │   ├── SECURITY.md            # Políticas de seguridad en el cliente
 │   ├── DECISIONS.md           # Registros de decisiones de arquitectura (ADRs)
 │   └── MEMORY.md              # Estado dinámico de progreso, tareas y notas vivas
-├── .cursor/
-│   └── rules/                 # Reglas técnicas automáticas para el IDE/Agente
 ├── tests/                     # Directorio de pruebas unitarias, integración y E2E
 ├── public/                    # Recursos estáticos servidos sin procesar (favicons, svgs)
 ├── src/                       # Código fuente de la aplicación

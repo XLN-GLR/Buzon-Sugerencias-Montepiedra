@@ -1,11 +1,6 @@
----
-description: Reglas técnicas del Frontend para Agentes de IA y Desarrolladores
-globs: **/*.{js,jsx,css,json,html}
----
-
 # Reglas Técnicas del Frontend - Buzón de Sugerencias Montepiedra
 
-Estas reglas son de cumplimiento obligatorio para cualquier intervención del Agente de IA o desarrollador en el frontend:
+Estas reglas son de cumplimiento obligatorio para cualquier intervención del Agente de IA o desarrollador en el frontend de este proyecto:
 
 ## 1. Alcance y Restricciones
 - **Exclusividad de Frontend:** Solo realizar cambios dentro del directorio `frontend/`. Bajo ninguna circunstancia alterar, renombrar, mover o eliminar archivos dentro de `backend/`.

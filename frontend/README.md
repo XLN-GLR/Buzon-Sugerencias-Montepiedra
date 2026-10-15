@@ -26,8 +26,6 @@ frontend/
 │   ├── SECURITY.md            # Checklist de Seguridad y Protección de Datos
 │   ├── DECISIONS.md           # Registros de Decisiones de Arquitectura (ADRs)
 │   └── MEMORY.md              # Estado Dinámico y Bitácora Viva del Proyecto
-├── .cursor/
-│   └── rules/                 # Reglas Técnicas Automáticas para el IDE/Agente (.mdc)
 ├── tests/                     # Directorio de Pruebas Unitarias y E2E
 ├── public/                    # Archivos estáticos públicos
 ├── src/                       # Código fuente de la aplicación React
@@ -39,7 +37,7 @@ frontend/
 │   ├── App.jsx                # Enrutador principal y rutas protegidas
 │   └── index.css              # Variables CSS y tokens de diseño globales
 ├── .env.example               # Plantilla de variables de entorno
-├── RULES.md                   # Normas técnicas estrictas para desarrolladores/agentes
+├── RULES.md                   # Normas técnicas estrictas para desarrolladores/agentes (sincronizadas con .agents/rules/)
 ├── TASKS.md                   # Plan de tareas secuencial y granular
 ├── package.json               # Dependencias y scripts de ejecución
 └── vite.config.js             # Configuración del empaquetador Vite

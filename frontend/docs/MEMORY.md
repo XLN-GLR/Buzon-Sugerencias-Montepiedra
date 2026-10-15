@@ -39,7 +39,7 @@ El frontend del **Buzón de Sugerencias Montepiedra** cuenta con una base sólid
 ## 3. En lo que estamos Trabajando Ahora (In Progress)
 - [x] **Adaptación Estructural y Documental (Guía Vibe Coding de Joel Hernández C.):**
   - Creación del ecosistema documental en `frontend/docs/` (`PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `TEST_PLAN.md`, `SECURITY.md`, `DECISIONS.md`, `MEMORY.md`).
-  - Definición de reglas automáticas en `frontend/.cursor/rules/` y `frontend/RULES.md`.
+  - Definición de reglas automáticas nativas en `.agents/rules/frontend-rules.md` y `frontend/RULES.md`.
   - Estructuración de `frontend/TASKS.md` y `frontend/.env.example`.
   - Preparación del directorio `frontend/tests/`.
 

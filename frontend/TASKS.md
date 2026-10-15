@@ -8,7 +8,7 @@ Este documento detalla el plan secuencial de trabajo para el desarrollo, manteni
 - [x] **TASK-001:** Inicialización del proyecto con React 18 y Vite 5.
 - [x] **TASK-002:** Configuración de ESLint y estructura de carpetas modular (`pages`, `components`, `context`, `utils`).
 - [x] **TASK-003:** Creación del Design System institucional en `src/index.css` con variables CSS y tema oscuro.
-- [x] **TASK-004:** Implementación de la documentación de contexto según la Guía Vibe Coding (`docs/PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `TEST_PLAN.md`, `SECURITY.md`, `DECISIONS.md`, `MEMORY.md`, `RULES.md`, `.cursor/rules/`).
+- [x] **TASK-004:** Implementación de la documentación de contexto según la Guía Vibe Coding (`docs/PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `TEST_PLAN.md`, `SECURITY.md`, `DECISIONS.md`, `MEMORY.md`, `RULES.md`, `.agents/rules/frontend-rules.md`).
 
 ---
 
