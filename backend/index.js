@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
 import { createClient } from '@supabase/supabase-js';
+import leoProfanity from 'leo-profanity';
 import { Config } from './config.js';
 
 const app = express();
@@ -34,19 +35,185 @@ app.get('/', (req, res) => {
   });
 });
 
-// Listado de palabras prohibidas para moderación de contenido (filtro de lenguaje inapropiado)
+// =======================================================
+// MOTOR DE FILTRADO DE LENGUAJE INAPROPIADO (TOKEN-BASED & API)
+// =======================================================
+
+// Inicializar diccionario en español para leo-profanity
+leoProfanity.loadDictionary('es');
+
+// Listado de palabras prohibidas en español y modismos locales (Ecuador y Latinoamérica)
+// Evaluados ESTRICTAMENTE por tokens / palabras completas para evitar falsos positivos
 const FORBIDDEN_WORDS = [
-  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón',
-  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil',
-  'groseria', 'grosería', 'basura', 'hijo de puta', 'malparido', 'culiado'
+  'mierda', 'mierdas', 'mierdoso', 'mierdosa',
+  'puto', 'putos', 'puta', 'putas', 'putita', 'putitas', 'putito', 'putitos', 'puton', 'putona', 'putones', 'putonas',
+  'pendejo', 'pendejos', 'pendeja', 'pendejas', 'pendejada', 'pendejadas',
+  'cabron', 'cabrones', 'cabrona', 'cabronas', 'cabronada',
+  'estupido', 'estupidos', 'estupida', 'estupidas', 'estupidez',
+  'idiota', 'idiotas', 'idiotez',
+  'imbecil', 'imbeciles', 'imbecilidad',
+  'tarado', 'tarada', 'tarados', 'taradas',
+  'culiao', 'culiaos', 'culiado', 'culiados', 'culo', 'culos', 'culon', 'culona',
+  'malparido', 'malparida', 'malparidos', 'malparidas',
+  'maricon', 'maricones', 'marica', 'maricas', 'mariconada',
+  'cojudo', 'cojudos', 'cojuda', 'cojudas', 'cojudez', 'cojudezas',
+  'careverga', 'carevergas', 'carepicha', 'carechimba',
+  'verga', 'vergas', 'vergazo', 'vergon',
+  'chucha', 'chuchas', 'chuchatumadre', 'conchatumadre', 'conchetumadre',
+  'webon', 'webona', 'webonada', 'huevon', 'huevona', 'huevada', 'huevadas',
+  'bastardo', 'bastardos', 'bastarda', 'bastardas',
+  'zorra', 'zorras',
+  'perra', 'perras',
+  'maldito', 'maldita', 'malditos', 'malditas',
+  'pelotudo', 'pelotuda', 'pelotudos', 'pelotudas',
+  'boludo', 'boluda', 'boludos', 'boludas',
+  'chingar', 'chingada', 'chingado', 'chingados',
+  'mamaguevo', 'mamahuevo', 'mamabicho', 'mamapinga',
+  'gonorrea', 'gonorreas',
+  'carajo', 'carajos',
+  'hdp'
 ];
 
-// Función para verificar si un texto contiene lenguaje inapropiado
-const hasProfanity = (text) => {
-  if (!text) return false;
-  const lower = String(text).toLowerCase();
-  return FORBIDDEN_WORDS.some(word => lower.includes(word));
+// Registrar palabras adicionales en leoProfanity
+leoProfanity.add(FORBIDDEN_WORDS);
+const FORBIDDEN_WORDS_SET = new Set(FORBIDDEN_WORDS);
+
+// Frases obscenas compuestas evaluadas con delimitadores de palabra (\b)
+const FORBIDDEN_PHRASES = [
+  /\bhijo\s+de\s+puta\b/i,
+  /\bhija\s+de\s+puta\b/i,
+  /\bhijos\s+de\s+puta\b/i,
+  /\bhijas\s+de\s+puta\b/i,
+  /\bconcha\s+de\s+tu\s+madre\b/i,
+  /\bchucha\s+de\s+tu\s+madre\b/i,
+  /\bmama\s+huevo\b/i,
+  /\bmama\s+guevo\b/i
+];
+
+// Palabras legítimas en español que jamás deben ser bloqueadas ni generar falsos positivos
+// (incluye palabras que contienen subcadenas como 'puta', 'cum', 'tit', etc.)
+const SAFE_WORDS_SET = new Set([
+  'computadora', 'computadoras', 'computador', 'computadores',
+  'disputa', 'disputas', 'disputar',
+  'reputacion', 'reputaciones',
+  'diputado', 'diputados', 'diputada', 'diputadas',
+  'imputar', 'imputado', 'imputada', 'imputacion', 'imputaciones',
+  'calcular', 'calculo', 'calculos', 'calculadora', 'calculadoras',
+  'acumular', 'acumulacion', 'acumulado', 'acumulada', 'acumulados', 'acumuladas', 'acumulador',
+  'institucional', 'institucionales', 'institucion', 'instituciones', 'instituto', 'institutos',
+  'constitucion', 'constitucional', 'constitucionales',
+  'titular', 'titulares', 'subtitulo', 'subtitulos',
+  'aptitud', 'aptitudes', 'actitud', 'actitudes',
+  'escupir', 'escupitajo'
+]);
+
+// Normaliza el texto: minúsculas, remoción de tildes/diacríticos (NFD)
+// y conversión de números/símbolos leetspeak solo cuando formen parte de una palabra con letras
+const normalizeText = (text) => {
+  if (!text) return '';
+  const lower = String(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  return lower.replace(/[a-z0-9@$]+/g, (token) => {
+    if (/[a-z]/.test(token)) {
+      return token
+        .replace(/0/g, 'o')
+        .replace(/1/g, 'i')
+        .replace(/3/g, 'e')
+        .replace(/4/g, 'a')
+        .replace(/@/g, 'a')
+        .replace(/\$/g, 's');
+    }
+    return token;
+  });
 };
+
+// Evaluación local ESTRICTAMENTE por palabras completas (tokens)
+const checkLocalProfanity = (normalizedText) => {
+  if (FORBIDDEN_PHRASES.some(regex => regex.test(normalizedText))) {
+    return true;
+  }
+
+  // Tokenizar por caracteres no alfanuméricos
+  const tokens = normalizedText.split(/[^a-z0-9]+/).filter(Boolean);
+
+  for (const token of tokens) {
+    if (SAFE_WORDS_SET.has(token)) {
+      continue;
+    }
+
+    if (FORBIDDEN_WORDS_SET.has(token) || leoProfanity.check(token)) {
+      return true;
+    }
+
+    // Regla para plurales exactos en 'es' o 's'
+    if (token.endsWith('es')) {
+      const singularEs = token.slice(0, -2);
+      if (FORBIDDEN_WORDS_SET.has(singularEs) || leoProfanity.check(singularEs)) {
+        return true;
+      }
+    }
+    if (token.endsWith('s')) {
+      const singularS = token.slice(0, -1);
+      if (FORBIDDEN_WORDS_SET.has(singularS) || leoProfanity.check(singularS)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+// Consumo de la API pública de PurgoMalum con AbortController (timeout de 2.5s)
+const checkPurgoMalumApi = async (texto) => {
+  // Enmascarar palabras seguras en español para prevenir falsos positivos por subcadenas en PurgoMalum
+  const textForApi = String(texto).replace(/\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]+\b/g, (w) => {
+    const norm = w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return SAFE_WORDS_SET.has(norm) ? 'objeto' : w;
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const url = `https://www.purgomalum.com/service/containsprofanity?text=${encodeURIComponent(textForApi)}`;
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const body = (await response.text()).trim().toLowerCase();
+    return body === 'true';
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // En caso de fallo de red o timeout, se delega al filtro local
+    return null;
+  }
+};
+
+// Función asíncrona principal para verificar si un texto contiene lenguaje inapropiado
+async function hasProfanity(texto) {
+  if (!texto || typeof texto !== 'string' || !texto.trim()) {
+    return false;
+  }
+
+  const normalized = normalizeText(texto);
+
+  // 1. Evaluación local por tokens
+  if (checkLocalProfanity(normalized)) {
+    return true;
+  }
+
+  // 2. Consulta a API externa PurgoMalum con timeout
+  const apiResult = await checkPurgoMalumApi(texto);
+  if (apiResult === true) {
+    return true;
+  }
+
+  return false;
+}
 
 // Función para validar cédula ecuatoriana según el algoritmo de Módulo 10
 const validateEcuadorianCedula = (cedula) => {
@@ -106,9 +273,14 @@ app.post('/sugerencias', async (req, res) => {
   }
 
   // Validación de lenguaje inapropiado
-  if (hasProfanity(titulo) || hasProfanity(descripcion)) {
+  const [hasProfanityTitulo, hasProfanityDesc] = await Promise.all([
+    hasProfanity(titulo),
+    hasProfanity(descripcion)
+  ]);
+
+  if (hasProfanityTitulo || hasProfanityDesc) {
     return res.status(400).json({
-      error: "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
+      error: "Contenido inapropiado detectado. Por favor, mantenga un lenguaje respetuoso."
     });
   }
 
@@ -561,9 +733,9 @@ app.post('/sugerencias/:id/comentarios', async (req, res) => {
   const cleanUsuarioId = String(usuario_id).trim();
 
   // Validación de lenguaje inapropiado
-  if (hasProfanity(cleanTexto)) {
+  if (await hasProfanity(cleanTexto)) {
     return res.status(400).json({
-      error: "Contenido inapropiado detectado en el comentario. Por favor, modifique su lenguaje."
+      error: "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
     });
   }
 

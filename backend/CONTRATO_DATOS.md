@@ -62,11 +62,15 @@ Se devuelve cuando alguno de los campos (`titulo`, `descripcion`, `categoria`, `
 ```
 
 ###### Error 400 - Bad Request (Contenido inapropiado detectado)
-Se devuelve cuando el servidor intercepta palabras prohibidas o inapropiadas (insultos, palabras vulgares u ofensivas en español) en los campos `titulo` o `descripcion` del cuerpo de la petición. El proceso de inserción a la base de datos se detiene inmediatamente:
+Se devuelve cuando el servidor detecta lenguaje ofensivo o inapropiado en los campos `titulo` o `descripcion` del cuerpo de la petición. La moderación se realiza mediante un motor híbrido y asíncrono (`await hasProfanity`):
+1. **Filtro Local Estricto por Tokens (Palabras Completas):** Normaliza el texto a minúsculas, remueve diacríticos/tildes (NFD), decodifica caracteres leetspeak camuflados (`0`->`o`, `1`->`i`, `3`->`e`, `4`->`a`, `@`->`a`, `$`->`s`) y evalúa estrictamente por palabras completas mediante tokenización (`leo-profanity` + diccionario ecuatoriano y latinoamericano). Términos legítimos con subcadenas como *"computadora"*, *"disputa"*, *"reputación"*, *"calcular"*, *"acumular"* o *"institucional"* jamás son bloqueados.
+2. **API Externa de PurgoMalum:** Consulta asíncrona a la API pública de PurgoMalum con `AbortController` de 2.5 segundos de timeout. En caso de timeout o caída de red, el sistema confía de forma resiliente en el filtro local por tokens.
+
+Si se detecta contenido inapropiado, el proceso de inserción se detiene inmediatamente:
 
 ```json
 {
-  "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
+  "error": "Contenido inapropiado detectado. Por favor, mantenga un lenguaje respetuoso."
 }
 ```
 
@@ -432,11 +436,11 @@ Se devuelve cuando `usuario_id` o `texto` están ausentes o vacíos:
 ```
 
 ###### Error 400 - Bad Request (Lenguaje inapropiado detectado)
-Se devuelve cuando el texto contiene palabras ofensivas o no permitidas:
+Se devuelve cuando el texto del comentario contiene lenguaje obsceno o no permitido. Aplica el motor de moderación híbrido por tokens y API externa (`await hasProfanity(cleanTexto)`), validando palabras completas con `leo-profanity`, diccionario de modismos locales y la API pública de PurgoMalum con timeout de 2.5s:
 
 ```json
 {
-  "error": "Contenido inapropiado detectado en el comentario. Por favor, modifique su lenguaje."
+  "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
 }
 ```
 

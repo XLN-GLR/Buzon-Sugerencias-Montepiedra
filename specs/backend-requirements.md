@@ -176,3 +176,20 @@ Se reforzó la validación del décimo dígito validador de la cédula ecuatoria
 ### Cambios en Base de Datos sugeridos
 - [x] Limpieza en tabla `usuarios` eliminando registros cuyas cédulas no cumplan con el algoritmo oficial de validación del Módulo 10.
 - [x] Siembra de usuarios iniciales limpios con cédulas reales y válidas para cada rol institucional ('admin', 'secretaria', 'mantenimiento', 'profesor', 'alumno') con sus respectivos hashes de bcrypt.
+
+---
+
+## [2026-10-21] Refactorización de Filtro de Lenguaje Inapropiado (Tokens y API Externa)
+**Estado:** 🟢 Completado
+
+### Contexto
+Se resolvió el bug crítico de falsos positivos en palabras legítimas como "computadora", "disputa", "reputación", "calcular" o "acumular" eliminando la búsqueda ingenua por subcadenas. Se implementó un motor híbrido basado en normalización (NFD + leetspeak), evaluación estricta por tokens (palabras completas con `leo-profanity` y modismos locales), y consumo asíncrono con timeout de 2.5s de la API pública gratuita de PurgoMalum.
+
+### Endpoints actualizados
+- [x] `POST /sugerencias`
+  - Validación con `await hasProfanity(...)` en `titulo` y `descripcion`.
+  - Error 400 Bad Request: `{ "error": "Contenido inapropiado detectado. Por favor, mantenga un lenguaje respetuoso." }`.
+- [x] `POST /sugerencias/:id/comentarios`
+  - Validación con `await hasProfanity(...)` en `texto`.
+  - Error 400 Bad Request: `{ "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje." }`.
+
