@@ -37,12 +37,10 @@ Este documento registra las decisiones arquitectónicas fundamentales y permanen
 ---
 
 ## ADR-004: Moderación Léxica Preventiva en Capa de Negocio
-- **Estado:** Aceptado / En Producción
+- **Estado:** Superado por ADR-007
 - **Contexto:** Al ser una plataforma educativa para estudiantes, existía el riesgo de ingresos de sugerencias con lenguaje ofensivo o inapropiado.
-- **Decisión:** Implementar la función `hasProfanity` con una lista negra de términos comunes (`FORBIDDEN_WORDS`) en `POST /sugerencias`.
-- **Consecuencias Positivas:**
-  - Bloqueo inmediato en el backend con respuesta HTTP `400 Bad Request` sin persistir contenido degradante en la base de datos.
-  - Disminución de la carga de trabajo del moderador institucional.
+- **Decisión Inicial:** Implementar una búsqueda simple de subcadenas con `FORBIDDEN_WORDS.some(word => lower.includes(word))` en `POST /sugerencias`.
+- **Consecuencias:** Aunque bloqueaba insultos básicos, introdujo graves falsos positivos en palabras académicas legítimas como "computadora", "disputa", "calcular" y "reputación".
 
 ---
 
@@ -62,3 +60,18 @@ Este documento registra las decisiones arquitectónicas fundamentales y permanen
 - **Decisión:** Configurar las relaciones foráneas de `usuario_id` en `sugerencias` para establecerse en `NULL` al borrar el usuario, y proveer la etiqueta 'Usuario eliminado' al cliente.
 - **Consecuencias Positivas:**
   - Conservación íntegra de la memoria histórica y trazabilidad de obras institucionales.
+
+---
+
+## ADR-007: Motor Híbrido de Moderación Léxica (Tokenización, Leetspeak y API PurgoMalum)
+- **Estado:** Aceptado / En Producción (2026-10-21)
+- **Contexto:** El enfoque ingenuo por subcadenas de ADR-004 bloqueaba sugerencias válidas como "Mejorar la red del laboratorio de computadoras" debido a la presencia de la subcadena "puta" en "computadoras".
+- **Decisión:** Sustituir la búsqueda por subcadena por un motor híbrido asíncrono (`hasProfanity`):
+  1. **Normalización NFD:** Descomposición de caracteres Unicode para retirar acentos y tildes sin alterar consonantes.
+  2. **Decodificación Leetspeak:** Sustitución de caracteres camuflados (`@` -> `a`, `3` -> `e`, `1` -> `i`, `0` -> `o`, `$` -> `s`).
+  3. **Tokenización por Palabras Completas:** Uso de `leo-profanity` configurado con modismos locales ecuatorianos (`cojudo`, `verga`, `chucha`, etc.) evaluando límites de palabra (`\b`), garantizando cero falsos positivos en términos como "computadora", "disputa", "reputación" o "calcular".
+  4. **Fallback / API Externa de PurgoMalum:** Consulta asíncrona a la API de PurgoMalum para capturar insultos complejos y en inglés, protegida con `AbortController` y timeout estricto de 2.5 segundos para no degradar el tiempo de respuesta del servidor en caso de fallos de red.
+- **Consecuencias Positivas:**
+  - Erradicación total de falsos positivos en el vocabulario escolar y técnico.
+  - Detección precisa de lenguaje ofensivo tanto en español como en inglés, inclusive con ofuscación leetspeak.
+  - Resiliencia asegurada: si PurgoMalum no responde en 2.5s, el filtro local toma la decisión sin bloquear la petición.

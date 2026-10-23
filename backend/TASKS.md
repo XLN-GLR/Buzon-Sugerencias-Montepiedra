@@ -20,7 +20,7 @@ Este documento detalla el plan secuencial de trabajo para el desarrollo, evoluci
 ---
 
 ## Fase 3: Buzón de Sugerencias, Moderación Léxica y Votación Atómica
-- [x] **TASK-BE-008:** Implementación del filtro léxico y lista de palabras no permitidas (`hasProfanity`).
+- [x] **TASK-BE-008:** Implementación del motor híbrido de moderación léxica (`hasProfanity`) con tokenización por palabras completas (`leo-profanity`), decodificación de leetspeak, normalización NFD y consulta asíncrona a PurgoMalum con timeout de 2.5s.
 - [x] **TASK-BE-009:** Creación del endpoint de inserción de sugerencias (`POST /sugerencias`) con validación de obligatoriedad y filtro de lenguaje.
 - [x] **TASK-BE-010:** Implementación del endpoint de consulta (`GET /sugerencias`) con ordenamiento cronológico descendente y anonimización de identidad según el rol de la petición.
 - [x] **TASK-BE-011:** Implementación del endpoint de votación ponderada (`POST /sugerencias/:id/votar`) gestionando likes, dislikes y anulación de votos en tabla intermedia.
@@ -31,7 +31,7 @@ Este documento detalla el plan secuencial de trabajo para el desarrollo, evoluci
 
 ## Fase 4: Sistema de Comentarios y Debate Comunitario
 - [x] **TASK-BE-014:** Endpoint de consulta de comentarios por sugerencia (`GET /sugerencias/:id/comentarios`) con vinculación de perfil de autor.
-- [x] **TASK-BE-015:** Endpoint de publicación de comentarios (`POST /sugerencias/:id/comentarios`) con validación de cuerpo y persistencia relacional.
+- [x] **TASK-BE-015:** Endpoint de publicación de comentarios (`POST /sugerencias/:id/comentarios`) con validación de cuerpo, filtro léxico híbrido y persistencia relacional.
 
 ---
 
@@ -43,6 +43,6 @@ Este documento detalla el plan secuencial de trabajo para el desarrollo, evoluci
 ---
 
 ## Fase 6: Pruebas Automatizadas y Evolución Futura (Siguientes Pasos)
-- [ ] **TASK-BE-019:** Crear suite de pruebas de integración automatizadas con Supertest / Vitest en `backend/tests/`.
+- [x] **TASK-BE-019:** Implementación de suite de pruebas unitarias y de integración para el filtro léxico y prevención de falsos positivos en `backend/tests/profanity.test.js` (23 casos de prueba con aserciones estrictas).
 - [ ] **TASK-BE-020:** Modularizar el archivo monolítico `index.js` en controladores (`/controllers`), rutas (`/routes`) y servicios (`/services`) cuando la fase de refactorización sea programada.
 - [ ] **TASK-BE-021:** Implementar autenticación basada en tokens JWT con verificación asimétrica en sustitución del encabezado simple de rol.

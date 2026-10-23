@@ -14,7 +14,10 @@ El backend del **Buzón de Sugerencias Montepiedra** cuenta con un servidor mono
   - Endpoint `POST /auth/primer-ingreso` para configuración inicial de credenciales institucionales.
   - Validación matemática oficial mediante algoritmo de Módulo 10 en `validateEcuadorianCedula`.
 - [x] **Módulo 2: Buzón de Sugerencias, Votos y Comentarios:**
-  - Endpoint `POST /sugerencias` con filtro de profanidad (`hasProfanity`).
+  - Endpoint `POST /sugerencias` con motor híbrido de moderación léxica asíncrono (`hasProfanity`).
+  - Erradicación de falsos positivos en palabras legítimas mediante tokenización estricta por palabras completas (`leo-profanity`).
+  - Detección de ofuscación leetspeak y remoción de diacríticos NFD.
+  - Integración con API externa de PurgoMalum con timeout de 2.5s mediante `AbortController`.
   - Endpoint `GET /sugerencias` con anonimización selectiva para roles no administradores.
   - Endpoint `POST /sugerencias/:id/votar` con control atómico de likes y dislikes.
   - Endpoint `PATCH /sugerencias/:id/moderacion` para respuesta oficial del moderador.
@@ -28,7 +31,9 @@ El backend del **Buzón de Sugerencias Montepiedra** cuenta con un servidor mono
   - Endpoint `GET /sugerencias/mantenimiento` filtrado por infraestructura.
   - Endpoint `PATCH /sugerencias/:id/estado` para transiciones de estado.
   - Endpoints `GET`, `POST`, `DELETE /mantenimiento/tareas` para el tablón de mantenimiento.
-- [x] **Suite de Verificación Manual:**
+- [x] **Suite Automatizada de Pruebas:**
+  - Archivo `backend/tests/profanity.test.js` con 23 casos de prueba ejecutados exitosamente para verificación de cero falsos positivos e intercepción de insultos directos y camuflados.
+- [x] **Suite de Verificación Manual de Endpoints:**
   - Archivo `backend/pruebas.http` con más de 20 casos de prueba listos para ejecución.
 - [x] **Documentación de Contrato:**
   - `backend/CONTRATO_DATOS.md` y `contrato.md` en raíz.
@@ -36,12 +41,10 @@ El backend del **Buzón de Sugerencias Montepiedra** cuenta con un servidor mono
 ---
 
 ## 3. En lo que estamos Trabajando Ahora (In Progress)
-- [x] **Adaptación Estructural y Documental (Guía Vibe Coding de Joel Hernández C.):**
-  - Creación de la estructura documental en `backend/docs/` (`PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `TEST_PLAN.md`, `SECURITY.md`, `DECISIONS.md`, `MEMORY.md`).
-  - Creación de `backend/RULES.md` y `.agents/rules/backend-rules.md`.
-  - Estructuración de `backend/TASKS.md` y documentación `backend/README.md`.
-  - Creación de carpeta de soporte para pruebas `backend/tests/`.
-  - Todo realizado con **cero modificaciones en el código funcional existente** y **cero alteraciones en el frontend**.
+- [x] **Sincronización y Actualización Integral de Documentación:**
+  - Actualización de `backend/docs/` (`PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `TEST_PLAN.md`, `SECURITY.md`, `DECISIONS.md`, `MEMORY.md`).
+  - Actualización de `backend/TASKS.md`, `backend/README.md` y `backend/tests/README.md`.
+  - Verificación del árbol de dependencias (`npm install`) y ejecución exitosa de pruebas automatizadas (`node tests/profanity.test.js`).
 
 ---
 

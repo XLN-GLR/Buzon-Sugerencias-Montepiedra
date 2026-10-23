@@ -52,13 +52,28 @@ Verificar la robustez, seguridad, exactitud de la lógica de negocio y consisten
 - [ ] **TC-BE-MANT-02:** Actualización de estado operativo (`PATCH /sugerencias/:id/estado`) a `en proceso` o `realizada` -> `200 OK`.
 - [ ] **TC-BE-MANT-03:** Creación y borrado de tareas internas de mantenimiento -> `201 Created` y `200 OK`.
 
+### Módulo 6: Moderación Léxica y Prevención de Falsos Positivos (`tests/profanity.test.js`)
+- [x] **TC-BE-PROF-01:** Palabras legítimas ("computadora", "computadoras", "disputa", "reputación", "calcular", "acumular", "institucional") no deben ser bloqueadas (`expected: false`).
+- [x] **TC-BE-PROF-02:** Frases institucionales completas ("Mejorar la red del laboratorio de computadoras", "aula 4 piso 3") no deben ser bloqueadas (`expected: false`).
+- [x] **TC-BE-PROF-03:** Insultos directos ("puta", "puto", "mierda", "pendejo", "cojudo", "verga", "chucha", "hijo de puta") deben ser bloqueados inmediatamente (`expected: true`).
+- [x] **TC-BE-PROF-04:** Insultos camuflados con leetspeak ("p3nd3jo", "m1erd@", "put@", "c0judo", "v3rg@") deben ser decodificados y bloqueados (`expected: true`).
+- [x] **TC-BE-PROF-05:** Insultos en inglés capturados por API externa PurgoMalum ("fuck you") deben ser bloqueados (`expected: true`).
+
 ---
 
 ## 4. Guía de Ejecución Rápida
+
+### A. Ejecución de Suite Automatizada de Moderación Léxica:
+```powershell
+cd backend
+node tests/profanity.test.js
+```
+*Resultado esperado:* 23 casos de prueba ejecutados exitosamente con 0 falsos positivos.
+
+### B. Pruebas de Endpoints con `pruebas.http`:
 1. Iniciar el servidor backend en modo local:
    ```powershell
    cd backend
-   npm install
    node index.js
    ```
-2. Abrir el archivo `backend/pruebas.http` en su entorno y ejecutar las peticiones secuenciales.
+2. Abrir el archivo `backend/pruebas.http` en su editor (con extensión REST Client o Thunder Client) y ejecutar las peticiones secuenciales.

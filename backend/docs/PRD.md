@@ -37,7 +37,7 @@ El sistema implementa un modelo de autorización basado en roles (RBAC) gestiona
 ## 3. Problemas que Resuelve el Backend
 - **Centralización y Persistencia Segura:** Evita la fragmentación de datos y garantiza respaldo relacional en PostgreSQL vía Supabase.
 - **Validación de Identidad e Integridad de Datos:** Exige que toda cédula ingresada cumpla el algoritmo verificador de Módulo 10, bloqueando registros inválidos o ficticios.
-- **Moderación Léxica Automatizada:** Intercepta expresiones soeces o agravios antes de persistir registros en base de datos.
+- **Moderación Léxica Automatizada e Inteligente:** Intercepta expresiones soeces o agravios antes de persistir registros mediante un motor híbrido basado en tokenización estricta por palabras completas (`leo-profanity`), decodificación de leetspeak y consulta asíncrona a la API de PurgoMalum, garantizando cero falsos positivos en vocabulario académico legítimo ("computadora", "disputa", "reputación", "calcular").
 - **Privacidad del Estudiante:** Protege la identidad de los alumnos en consultas públicas respetando la directiva de anonimato institucional.
 - **Control de Votaciones Duplicadas:** Asegura que un usuario solo pueda mantener un estado de voto por sugerencia (like, dislike o anulación).
 

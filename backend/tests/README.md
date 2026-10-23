@@ -6,7 +6,19 @@ Este directorio aloja las especificaciones, guías y casos de prueba para verifi
 
 ## 1. Estrategia Actual de Pruebas
 
-Actualmente, las pruebas de integración de endpoints se gestionan a través del archivo:
+El backend cuenta con dos niveles de verificación:
+
+### A. Pruebas Unitarias y de Integración Automatizadas:
+- [`backend/tests/profanity.test.js`](profanity.test.js): Suite automatizada de aserciones para el motor de moderación léxica híbrido, comprobando la erradicación de falsos positivos ("computadora", "disputa", "calcular", etc.), la captura de modismos locales y la integración con la API de PurgoMalum.
+
+**Comando de ejecución:**
+```bash
+cd backend
+node tests/profanity.test.js
+```
+
+### B. Pruebas de Endpoints HTTP (REST):
+Las pruebas de integración de endpoints se gestionan a través del archivo:
 - [`backend/pruebas.http`](../pruebas.http)
 
 ### ¿Cómo ejecutar las pruebas con `pruebas.http`?

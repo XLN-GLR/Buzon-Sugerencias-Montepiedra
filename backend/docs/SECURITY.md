@@ -14,9 +14,12 @@ El backend del Buzón de Sugerencias Montepiedra actúa como la primera línea d
   - Valida que el tercer dígito corresponda a persona natural (< 6).
   - Aplica coeficientes `[2, 1, 2, 1, 2, 1, 2, 1, 2]` y comprueba el décimo dígito verificador.
   - Rechaza cualquier intento de inyección de valores adulterados antes de consultar la base de datos.
-- [x] **Filtro de Contenido y Moderación Léxica:**
-  - Array de palabras prohibidas (`FORBIDDEN_WORDS`) intercepta insultos y lenguaje soez.
-  - Detiene inmediatamente la transacción retornando un código `400 Bad Request`.
+- [x] **Motor Híbrido de Moderación Léxica y Filtro de Contenido:**
+  - **Normalización NFD:** Descomposición de caracteres Unicode para ignorar tildes sin desvirtuar el texto.
+  - **Decodificación de Leetspeak:** Traducción de caracteres ofuscados habituales (`@` -> `a`, `3` -> `e`, `1` -> `i`, `0` -> `o`, `$` -> `s`).
+  - **Tokenización por Palabras Completas:** Validación estricta con `leo-profanity` y diccionario local ecuatoriano/latinoamericano mediante límites de palabra (`\b`), garantizando cero falsos positivos en términos como "computadora", "disputa", "reputación" o "calcular".
+  - **Inspección Externa Asíncrona:** Consulta a la API pública de PurgoMalum con timeout preventivo de 2.5 segundos (`AbortController`) para capturar obscenidades compuestas o anglosajonas.
+  - Detiene inmediatamente la transacción retornando un código `400 Bad Request` sin persistir el registro ofensivo.
 
 ### B. Criptografía y Gestión de Credenciales
 - [x] **Almacenamiento Seguro de Contraseñas:**

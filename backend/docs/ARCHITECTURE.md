@@ -7,6 +7,7 @@
 - **CORS:** Cross-Origin Resource Sharing habilitado mediante middleware `cors`
 - **Persistencia & BaaS:** Supabase Client (`@supabase/supabase-js` v2.43.0) conectado a base de datos PostgreSQL en la nube
 - **Criptografía:** `bcrypt` v6.0.0 para hashing seguro de contraseñas (salt factor: 10)
+- **Moderación de Contenido:** `leo-profanity` v1.9.0 + diccionario de modismos latinoamericanos y ecuatorianos + integración asíncrona con API externa PurgoMalum
 - **Gestión de Configuración:** `dotenv` v16.4.5 cargando variables desde `.env`
 - **Protocolo de Comunicación:** API RESTful sobre HTTP/1.1 con payloads y respuestas en formato JSON
 
@@ -33,7 +34,12 @@
 +-------------------------------------------------------------------------+
 |                 CAPA DE VALIDACIÓN Y REGLAS DE NEGOCIO                  |
 |  - Algoritmo Módulo 10 (Cédula de identidad ecuatoriana)                |
-|  - Filtro de Moderación Léxica (Detección de palabras prohibidas)       |
+|  - Motor Híbrido de Moderación Léxica:                                  |
+|      * Normalización NFD (remoción de tildes/diacríticos)               |
+|      * Decodificación de leetspeak (@->a, 3->e, 1->i, 0->o, $->s)       |
+|      * Tokenización estricta por palabras completas (leo-profanity)     |
+|        (Cero falsos positivos en 'computadora', 'disputa', etc.)        |
+|      * Consulta asíncrona a API PurgoMalum con AbortController (2.5s)   |
 |  - Control de Unicidad de Voto (Like / Dislike)                         |
 |  - Anonimización Dinámica (Ocultamiento de 'usuarios' para no-admin)    |
 +------------------------------------+------------------------------------+
@@ -55,7 +61,7 @@
 |    comentarios_sugerencias, tareas_mantenimiento                        |
 |  - Integridad Referencial (Foreign Keys con ON DELETE SET NULL/CASCADE) |
 |  - Políticas de Seguridad de Nivel de Fila (RLS)                        |
-+-------------------------------------------------------------------------+
++------------------------------------+------------------------------------+
 ```
 
 ---
@@ -73,6 +79,7 @@ backend/
 │   ├── DECISIONS.md           # Registros de decisiones de arquitectura (ADRs)
 │   └── MEMORY.md              # Estado dinámico de progreso, endpoints y notas vivas
 ├── tests/                     # Suite y documentación de pruebas de endpoints
+│   ├── profanity.test.js      # Suite de pruebas unitarias/integración para filtro léxico
 │   └── README.md              # Guía de ejecución de pruebas automatizadas y manuales
 ├── .env.example               # Plantilla de variables de entorno requeridas
 ├── .gitignore                 # Exclusiones de Git para el backend (node_modules, .env)

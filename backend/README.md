@@ -61,13 +61,13 @@ http://127.0.0.1:8080
    - Flujo de primer ingreso con configuración de clave permanente.
 
 2. **Buzón de Sugerencias y Votaciones (`/sugerencias`):**
-   - Publicación de sugerencias con filtro de palabras ofensivas (`hasProfanity`).
+   - Publicación de sugerencias con motor híbrido de moderación léxica (`hasProfanity`) mediante tokenización por palabras completas (`leo-profanity`), decodificación de leetspeak y consulta asíncrona a PurgoMalum (cero falsos positivos en términos como "computadora").
    - Anonimización automática de autor para roles no administradores si `es_anonimo: true`.
    - Sistema atómico de votación ponderada (`like` / `dislike`).
    - Moderación administrativa y respuestas oficiales.
 
 3. **Comentarios en Hilo (`/sugerencias/:id/comentarios`):**
-   - Discusión constructiva y trazabilidad de opiniones por propuesta.
+   - Discusión constructiva y trazabilidad de opiniones por propuesta con validación léxica.
 
 4. **Secretaría y Nómina (`/usuarios`):**
    - Ingesta individual y masiva de nómina con verificación de integridad de cédula.
@@ -77,9 +77,15 @@ http://127.0.0.1:8080
 
 ---
 
-## 🧪 Pruebas de Endpoints
+## 🧪 Pruebas del Backend
 
-Para probar los endpoints de la API:
+### 1. Suite Automatizada de Moderación Léxica:
+Ejecuta 23 casos de prueba verificando prevención de falsos positivos, modismos locales e insultos en inglés:
+```bash
+node tests/profanity.test.js
+```
+
+### 2. Pruebas de Endpoints con `pruebas.http`:
 - Utilice el archivo [`pruebas.http`](pruebas.http) directamente en su editor mediante la extensión **REST Client** (VS Code) o **Thunder Client**.
 - Consulte el plan de pruebas en [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) y la guía en [`tests/README.md`](tests/README.md).
 

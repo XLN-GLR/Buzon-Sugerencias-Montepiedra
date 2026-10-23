@@ -84,7 +84,14 @@ La API del Buz√≥n de Sugerencias Montepiedra sigue las convenciones RESTful est√
 }
 ```
 
-#### 3. Lenguaje inapropiado interceptado (400 Bad Request)
+#### 3. Lenguaje inapropiado interceptado en sugerencia (400 Bad Request)
+```json
+{
+  "error": "Contenido inapropiado detectado. Por favor, mantenga un lenguaje respetuoso."
+}
+```
+
+#### 4. Lenguaje inapropiado interceptado en comentario (400 Bad Request)
 ```json
 {
   "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje."
