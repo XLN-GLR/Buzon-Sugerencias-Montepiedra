@@ -257,7 +257,7 @@ REGLAS DE CLASIFICACIÓN:
 Responde ÚNICAMENTE en formato JSON válido con la siguiente estructura exacta:
 { "is_inappropriate": boolean }`;
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 
     const generatePromise = ai.models.generateContent({
       model: modelName,

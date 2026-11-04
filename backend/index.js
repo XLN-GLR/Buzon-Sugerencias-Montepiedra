@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import { createClient } from '@supabase/supabase-js';
 import { hasProfanity } from './profanityFilter.js';
 import { Config } from './config.js';
+import { suggestionLimiter, commentLimiter } from './rateLimiter.js';
 
 const app = express();
 
@@ -88,7 +89,7 @@ const validateEcuadorianCedula = (cedula) => {
 // =======================================================
 
 // 1. Ruta para crear una nueva sugerencia
-app.post('/sugerencias', async (req, res) => {
+app.post('/sugerencias', suggestionLimiter, async (req, res) => {
   const { titulo, descripcion, categoria, usuario_id, es_anonimo, respuesta_moderador, foto_url } = req.body;
 
   // Validación de campos requeridos
@@ -543,7 +544,7 @@ app.get('/sugerencias/:id/comentarios', async (req, res) => {
 });
 
 // 7. Ruta para agregar un nuevo comentario a una sugerencia
-app.post('/sugerencias/:id/comentarios', async (req, res) => {
+app.post('/sugerencias/:id/comentarios', commentLimiter, async (req, res) => {
   const { id } = req.params;
   const { usuario_id, texto } = req.body;
 
