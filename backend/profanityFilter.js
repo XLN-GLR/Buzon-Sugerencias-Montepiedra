@@ -222,7 +222,34 @@ export async function hasProfanity(texto) {
 
   const str = texto.trim();
 
-  // 1. Verificación de frases compuestas
+  // ==========================================================================
+  // PASO 1: ANÁLISIS DE MAYÚSCULAS ANÓMALAS (Case-Transition Splitting)
+  // Se evalúa DIRECTAMENTE sobre el texto original antes de cualquier conversión a minúsculas
+  // ==========================================================================
+  const rawWords = str.split(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ@$]+/).filter(Boolean);
+
+  for (const palabra of rawWords) {
+    // Si la palabra NO cumple con el formato estándar (todo minúsculas, todo MAYÚSCULAS o Capitalizada)
+    if (!isNormalCasing(palabra)) {
+      const subTokens = palabra.match(/[A-ZÁÉÍÓÚÜÑ]+|[a-záéíóúüñ]+/g) || [];
+      for (const subToken of subTokens) {
+        const normSub = normalizeBasic(subToken);
+        if (normSub && BAD_WORDS_SET.has(normSub)) {
+          return true; // Bloqueo inmediato: insulto resaltado con mayúsculas anómalas
+        }
+        const subVariants = getTokenVariants(subToken);
+        for (const variant of subVariants) {
+          if (variant && BAD_WORDS_SET.has(variant)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
+  // PASO 2: VERIFICACIÓN DE FRASES COMPUESTAS OBSCENAS
+  // ==========================================================================
   const normalizedStr = normalizeBasic(str);
   if (FORBIDDEN_PHRASES.some((regex) => regex.test(normalizedStr))) {
     return true;
@@ -230,7 +257,9 @@ export async function hasProfanity(texto) {
 
   const tokensToCheck = [];
 
-  // 2. Regla 3: Detección de evasión por deletreo espaciado o punteado (ej. p u t a, p.u.t.a)
+  // ==========================================================================
+  // PASO 3: DETECCIÓN DE DELETREO ESPACIADO O PUNTEADO (ej. p u t a, p.u.t.a)
+  // ==========================================================================
   const spacedMatches = str.match(SPACED_SPELLING_REGEX);
   if (spacedMatches) {
     for (const match of spacedMatches) {
@@ -241,27 +270,14 @@ export async function hasProfanity(texto) {
     }
   }
 
-  // 3. Regla 3: Tokenización por signos de puntuación o caracteres especiales
-  // Mantenemos @ y $ para que sean procesados por el sustituto leetspeak
-  const rawWords = str.split(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ@$]+/).filter(Boolean);
-
+  // ==========================================================================
+  // PASO 4: EVALUACIÓN ESTÁNDAR DE TOKENS (Palabras completas y variantes)
+  // ==========================================================================
   for (const word of rawWords) {
-    // Evaluar la palabra completa
     tokensToCheck.push(word);
-
-    // Regla 2: Case-Transition Splitting
-    // Si la palabra NO cumple los patrones normales (mayúsculas incrustadas o alternadas como comPUTAdora)
-    if (!isNormalCasing(word)) {
-      const subTokens = word.match(/[A-ZÁÉÍÓÚÜÑ]+|[a-záéíóúüñ]+/g);
-      if (subTokens && subTokens.length > 1) {
-        for (const sub of subTokens) {
-          tokensToCheck.push(sub);
-        }
-      }
-    }
   }
 
-  // 4. Reglas 1, 4 y 5: Evaluación de Coincidencia Exacta (O(1) con Set)
+  // Evaluación de coincidencia exacta O(1) con BAD_WORDS_SET
   for (const token of tokensToCheck) {
     const variants = getTokenVariants(token);
     for (const variant of variants) {
@@ -273,3 +289,4 @@ export async function hasProfanity(texto) {
 
   return false;
 }
+
