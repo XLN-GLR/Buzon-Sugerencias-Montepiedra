@@ -1,4 +1,5 @@
 import leoProfanity from 'leo-profanity';
+import { GoogleGenAI } from '@google/genai';
 
 /**
  * ============================================================================
@@ -208,14 +209,99 @@ export function isNormalCasing(word) {
 // Regla 3: Detección de evasión por deletreo espaciado o punteado
 const SPACED_SPELLING_REGEX = /\b([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ][\s.\-_*\/~|]+){2,}[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]\b/g;
 
+// ============================================================================
+// CAPA DE INTELIGENCIA ARTIFICIAL (Google Gemini Flash)
+// ============================================================================
+let geminiClient = null;
+
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || !apiKey.trim()) return null;
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey: apiKey.trim() });
+  }
+  return geminiClient;
+}
+
 /**
- * Función principal para evaluar si un texto contiene lenguaje ofensivo o evasiones intencionales.
- * Devuelve `true` si se detecta lenguaje inapropiado, `false` en caso contrario.
+ * Consulta semántica a Google Gemini Flash con timeout estricto de 2.5s mediante AbortController.
+ * Devuelve boolean (true = ofensivo, false = permitido) o null si falla.
+ */
+async function checkGeminiProfanity(texto) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || !apiKey.trim()) return null;
+
+  const controller = new AbortController();
+  const timeoutMs = 2500;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const ai = getGeminiClient();
+    if (!ai) return null;
+
+    const systemInstruction = `Eres un moderador estricto pero justo de lenguaje para una plataforma educativa institucional escolar (Buzón de Sugerencias Montepiedra).
+Tu tarea es clasificar si el texto ingresado por un usuario contiene lenguaje inapropiado, ofensivo o institucionalmente inaceptable.
+
+REGLAS DE CLASIFICACIÓN:
+1. PERMITIR (is_inappropriate: false):
+   - Palabras legítimas del español que contienen sílabas coincidentes con insultos (Problema de Scunthorpe): "Computadora", "computadora", "COMPUTADORA", "disputa", "reputación", "diputado", "cálculo", "acumular", "asno", etc.
+   - Términos anatómicos o biológicos en contexto formal, biológico o neutro (pene, vagina, senos).
+   - Sugerencias y críticas constructivas sobre las instalaciones o docentes expresadas con respeto.
+
+2. BLOQUEAR (is_inappropriate: true):
+   - Insultos, groserías, vulgaridades, descalificaciones, términos denigrantes u hostiles en español o inglés (puta, mierda, pendejo, cabrón, idiota, estúpido, etc.).
+   - Modismos vulgares locales (cojudo, verga, chucha, huevón, etc.).
+   - Evasiones deliberadas con mayúsculas anómalas para resaltar insultos dentro de palabras legítimas (ejemplo: "comPUTAdora", "disPUTA", "rePUTAción").
+   - Evasiones por deletreo espaciado o punteado (p.u.t.a, p u t a, m i e r d a) o leetspeak (p3nd3jo).
+
+Responde ÚNICAMENTE en formato JSON válido con la siguiente estructura exacta:
+{ "is_inappropriate": boolean }`;
+
+    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+
+    const generatePromise = ai.models.generateContent({
+      model: modelName,
+      contents: String(texto),
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+        abortSignal: controller.signal
+      }
+    });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      controller.signal.addEventListener('abort', () => {
+        reject(new Error(`Timeout de Gemini excedido (${timeoutMs}ms)`));
+      });
+    });
+
+    const response = await Promise.race([generatePromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+
+    const rawText = response.text?.trim() || '{}';
+    const parsed = JSON.parse(rawText);
+
+    if (typeof parsed.is_inappropriate === 'boolean') {
+      return parsed.is_inappropriate;
+    }
+    return null;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Motor algorítmico local de alta disponibilidad (Costo cero y Fallback resiliente).
+ * Conserva intactas todas las reglas: Case-transition splitting, frases compuestas,
+ * detección de deletreo espaciado/punteado, normalización NFD, leetspeak, colapso de
+ * repeticiones y verificación O(1) con BAD_WORDS_SET.
  *
  * @param {string} texto
- * @returns {Promise<boolean>}
+ * @returns {boolean}
  */
-export async function hasProfanity(texto) {
+export function checkLocalProfanity(texto) {
   if (!texto || typeof texto !== 'string' || !texto.trim()) {
     return false;
   }
@@ -288,5 +374,34 @@ export async function hasProfanity(texto) {
   }
 
   return false;
+}
+
+/**
+ * Función principal para evaluar si un texto contiene lenguaje ofensivo o inapropiado.
+ * 1. Capa IA: Si existe GEMINI_API_KEY, consulta semánticamente a Google Gemini Flash con timeout de 2.5s.
+ * 2. Fallback de Alta Disponibilidad: Si no hay clave, o si Gemini falla/tarda, recurre al motor local existente.
+ *
+ * @param {string} texto
+ * @returns {Promise<boolean>}
+ */
+export async function hasProfanity(texto) {
+  if (!texto || typeof texto !== 'string' || !texto.trim()) {
+    return false;
+  }
+
+  // 1. Capa IA: Si existe API key, consultar a Google Gemini Flash
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
+    try {
+      const isBlocked = await checkGeminiProfanity(texto);
+      if (typeof isBlocked === 'boolean') {
+        return isBlocked;
+      }
+    } catch (err) {
+      console.warn('[PROFANITY] Gemini falló o tardó demasiado, pasando al motor local existente:', err.message);
+    }
+  }
+
+  // 2. Fallback de Alta Disponibilidad: Motor local existente
+  return checkLocalProfanity(texto);
 }
 
