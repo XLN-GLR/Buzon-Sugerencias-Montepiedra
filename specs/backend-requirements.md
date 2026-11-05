@@ -193,3 +193,110 @@ Se resolvió el bug crítico de falsos positivos en palabras legítimas como "co
   - Validación con `await hasProfanity(...)` en `texto`.
   - Error 400 Bad Request: `{ "error": "Contenido inapropiado detectado. Por favor, modifique su lenguaje." }`.
 
+
+
+---
+
+## [2026-11-04] Delegación de Validación Anti-Profanity y Manejo HTTP 400 en SuggestionForm
+**Estado:** 🟡 Pendiente
+
+### Contexto de UI
+En el formulario de creación de sugerencias (`SuggestionForm.jsx`), se eliminó la validación local estática con `.includes()` para erradicar el problema de Scunthorpe (bloqueo erróneo de términos legítimos como "Computadora"). La validación de contenido inapropiado se delega por completo al backend, gestionando la respuesta de error HTTP 400 para mostrar una alerta visual clara al usuario sin interrumpir el flujo cuando se envían términos válidos.
+
+### Endpoints solicitados
+- [ ] `POST /sugerencias`
+  - **Params / Query:** Ninguno
+  - **Headers:** `x-user-role: alumno`
+  - **Request Body:**
+    ```json
+    {
+      "titulo": "Mejorar las computadoras del laboratorio",
+      "descripcion": "Se requiere mantenimiento en las computadoras para las clases de informática.",
+      "categoria": "Infraestructura",
+      "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "es_anonimo": false,
+      "votos": 0,
+      "respuesta_moderador": null,
+      "foto_url": null
+    }
+    ```
+  - **Response esperada (Éxito HTTP 201):**
+    ```json
+    {
+      "message": "Sugerencia creada exitosamente",
+      "data": {
+        "id": "sug-987",
+        "titulo": "Mejorar las computadoras del laboratorio",
+        "descripcion": "Se requiere mantenimiento en las computadoras para las clases de informática.",
+        "categoria": "Infraestructura",
+        "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+        "estado": "pendiente",
+        "es_anonimo": false,
+        "votos": 0,
+        "likes": 0,
+        "dislikes": 0,
+        "respuesta_moderador": null,
+        "foto_url": null,
+        "created_at": "2026-11-04T22:50:00.000Z"
+      }
+    }
+    ```
+  - **Response esperada (Error HTTP 400 Bad Request):**
+    ```json
+    {
+      "error": "Contenido inapropiado detectado. Por favor, mantenga un lenguaje respetuoso."
+    }
+    ```
+
+### Cambios en Base de Datos sugeridos
+- [ ] Ninguno (la persistencia en la tabla `sugerencias` mantiene la estructura existente).
+
+
+---
+
+## [2026-11-04] Intercepción y Gestión UI de Rate Limiting (HTTP 429) en Sugerencias y Comentarios
+**Estado:** 🟡 Pendiente
+
+### Contexto de UI
+Se actualizó la gestión de errores en `SuggestionForm.jsx` y `Board.jsx` (modal de comentarios) para capturar y mostrar claramente las respuestas HTTP 429 (Too Many Requests). La interfaz despliega alertas de aviso/tiempo amigables (con icono ⏳ y estilo visual diferenciado), preserva los textos ingresados por el usuario para evitar pérdida de datos y desactiva los estados de carga de los botones.
+
+### Endpoints solicitados
+- [ ] `POST /sugerencias`
+  - **Params / Query:** Ninguno
+  - **Headers:** `x-user-role: alumno`, `x-user-id: <usuario_id>`
+  - **Request Body:**
+    ```json
+    {
+      "titulo": "Mantenimiento a laboratorios",
+      "descripcion": "Solicitud de revisión de los equipos.",
+      "categoria": "Infraestructura",
+      "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "es_anonimo": true
+    }
+    ```
+  - **Response esperada (HTTP 429 Too Many Requests):**
+    ```json
+    {
+      "error": "Has alcanzado el límite de 1 sugerencia cada 24 horas. Por favor, intenta de nuevo más tarde."
+    }
+    ```
+
+- [ ] `POST /sugerencias/:id/comentarios`
+  - **Params / Query:** `id` (Path param - ID de sugerencia)
+  - **Headers:** `x-user-role: alumno`, `x-user-id: <usuario_id>`
+  - **Request Body:**
+    ```json
+    {
+      "usuario_id": "60685e1f-3d41-42c2-b9a6-d71739856b22",
+      "texto": "Apoyo la propuesta."
+    }
+    ```
+  - **Response esperada (HTTP 429 Too Many Requests):**
+    ```json
+    {
+      "error": "Has alcanzado el límite de 5 comentarios por hora. Por favor, espera antes de publicar nuevos comentarios."
+    }
+    ```
+
+### Cambios en Base de Datos sugeridos
+- [ ] Ninguno (la limitación de tasa se gestiona perimetralmente en memoria/middleware con `express-rate-limit`).

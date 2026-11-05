@@ -1,14 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import './Pages.css';
-
-// Lista de palabras prohibidas para moderación previa en frontend (coincidente con backend)
-const FORBIDDEN_WORDS = [
-  'mierda', 'puto', 'puta', 'pendejo', 'pendeja', 'cabron', 'cabrón', 
-  'estupido', 'estúpido', 'tonto', 'tonta', 'idiota', 'imbecil', 'imbécil', 
-  'groseria', 'grosería', 'basura', 'hijo de puta', 'malparido', 'culiado'
-];
 
 export default function SuggestionForm() {
   const { user } = useAuth();
@@ -21,13 +14,7 @@ export default function SuggestionForm() {
   const [submitted, setSubmitted] = useState(false);
   const [saveSource, setSaveSource] = useState('backend');
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Verificación de lenguaje inapropiado
-  const hasProfanity = (text) => {
-    if (!text) return false;
-    const lower = text.toLowerCase();
-    return FORBIDDEN_WORDS.some(word => lower.includes(word));
-  };
+  const [errorStatus, setErrorStatus] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,14 +22,8 @@ export default function SuggestionForm() {
 
     setLoading(true);
     setErrorMessage('');
+    setErrorStatus(null);
     setSubmitted(false);
-
-    // Validación anti-groserías
-    if (hasProfanity(title) || hasProfanity(description)) {
-      setErrorMessage('⚠️ ¡ATENCIÓN! Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.');
-      setLoading(false);
-      return;
-    }
 
     try {
       const result = await api.createSuggestion({
@@ -61,21 +42,53 @@ export default function SuggestionForm() {
         }
       });
 
-      setSaveSource(result.isSimulated ? 'local' : 'backend');
-      setSubmitted(true);
-
-      // Limpiar formulario
+      // Limpiar formulario y resetear errores previos
       setTitle('');
       setCategory('Academico');
       setDescription('');
       setFotoUrl('');
       setIsAnonymous(true);
+      setErrorMessage('');
+      setErrorStatus(null);
+
+      // Actualizar estado de éxito
+      setSaveSource(result.isSimulated ? 'local' : 'backend');
+      setSubmitted(true);
 
       setTimeout(() => {
         setSubmitted(false);
       }, 6000);
     } catch (err) {
-      setErrorMessage(err.message || 'Error al enviar la sugerencia.');
+      const status = err.status || err.response?.status;
+      const apiMessage = err.response?.data?.error || err.data?.error || err.message;
+      setErrorStatus(status);
+
+      // 1. Manejo específico de Rate Limit (HTTP 429)
+      if (status === 429 || (apiMessage && (apiMessage.includes('límite') || apiMessage.includes('24 horas')))) {
+        setErrorStatus(429);
+        setErrorMessage(
+          apiMessage || 
+          '⏳ Has alcanzado el límite de 1 sugerencia cada 24 horas. Por favor, intenta de nuevo más tarde.'
+        );
+        // NOTA: Se preserva el título y la descripción intactos en los campos del formulario
+      } 
+      // 2. Manejo de contenido inapropiado (HTTP 400)
+      else if (status === 400 || (apiMessage && apiMessage.toLowerCase().includes('inapropiado'))) {
+        setErrorStatus(400);
+        setErrorMessage(
+          apiMessage || 
+          '⚠️ ¡ATENCIÓN! Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.'
+        );
+      } 
+      // 3. Error de servidor u otros (HTTP 500)
+      else {
+        setErrorStatus(status || 500);
+        setErrorMessage(
+          apiMessage && !apiMessage.startsWith('Error ') && apiMessage !== 'Failed to fetch'
+            ? apiMessage 
+            : 'Ocurrió un error en el servidor al enviar la sugerencia. Por favor, reintenta más tarde.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -103,9 +116,18 @@ export default function SuggestionForm() {
         )}
 
         {errorMessage && (
-          <div className="alert-banner alert-error" style={{ display: 'flex', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '1.25rem' }}>🛑</span>
-            <span>{errorMessage}</span>
+          <div 
+            className={`alert-banner ${errorStatus === 429 ? 'alert-warning' : 'alert-error'}`} 
+            style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
+          >
+            <span style={{ fontSize: '1.25rem' }}>
+              {errorStatus === 429 ? '⏳' : errorStatus === 400 ? '🛑' : '⚠️'}
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              {errorStatus === 429 && <strong>Límite de participación alcanzado (429)</strong>}
+              {errorStatus === 400 && <strong>Moderación de contenido institucional</strong>}
+              <span>{errorMessage}</span>
+            </div>
           </div>
         )}
 

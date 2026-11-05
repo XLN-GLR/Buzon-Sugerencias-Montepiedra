@@ -7,7 +7,7 @@ import './Pages.css';
 export default function Board() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiSource, setApiSource] = useState('local');
@@ -24,6 +24,7 @@ export default function Board() {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
   const [commentError, setCommentError] = useState('');
+  const [commentErrorStatus, setCommentErrorStatus] = useState(null);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
 
@@ -62,7 +63,7 @@ export default function Board() {
       const newLikes = result.likes !== undefined ? result.likes : (result.votos !== undefined ? result.votos : 0);
       const newDislikes = result.dislikes !== undefined ? result.dislikes : 0;
 
-      setSuggestions(prev => 
+      setSuggestions(prev =>
         prev.map(s => {
           if (s.id === id) {
             return {
@@ -96,8 +97,9 @@ export default function Board() {
     setActiveCommentsSug(sug);
     setCommentsLoading(true);
     setCommentError('');
+    setCommentErrorStatus(null);
     setNewCommentText('');
-    
+
     const res = await api.getComments(sug.id, user ? user.rol : 'alumno');
     setComments(res.data || []);
     setCommentsLoading(false);
@@ -110,6 +112,7 @@ export default function Board() {
 
     setCommentSubmitting(true);
     setCommentError('');
+    setCommentErrorStatus(null);
 
     try {
       const userId = user.usuario_id || user.cedula || 'usr-default';
@@ -130,8 +133,39 @@ export default function Board() {
 
       setComments(prev => [...prev, addedComment]);
       setNewCommentText('');
+      setCommentError('');
+      setCommentErrorStatus(null);
     } catch (err) {
-      setCommentError(err.message || 'Error al publicar el comentario.');
+      const status = err.status || err.response?.status;
+      const apiMessage = err.response?.data?.error || err.data?.error || err.message;
+      setCommentErrorStatus(status);
+
+      // 1. Manejo específico de Rate Limit (HTTP 429)
+      if (status === 429 || (apiMessage && (apiMessage.includes('límite') || apiMessage.includes('hora')))) {
+        setCommentErrorStatus(429);
+        setCommentError(
+          apiMessage ||
+          '⏳ Has alcanzado el límite de 5 comentarios por hora. Por favor, espera antes de publicar nuevos comentarios.'
+        );
+        // NOTA: Se preserva el texto escrito en newCommentText sin vaciar el input
+      }
+      // 2. Manejo de contenido inapropiado (HTTP 400)
+      else if (status === 400 || (apiMessage && apiMessage.toLowerCase().includes('inapropiado'))) {
+        setCommentErrorStatus(400);
+        setCommentError(
+          apiMessage ||
+          '⚠️ ¡ATENCIÓN! Tu comentario contiene lenguaje inapropiado. Por favor, utiliza un vocabulario respetuoso.'
+        );
+      }
+      // 3. Error de servidor u otros (HTTP 500)
+      else {
+        setCommentErrorStatus(status || 500);
+        setCommentError(
+          apiMessage && !apiMessage.startsWith('Error ') && apiMessage !== 'Failed to fetch'
+            ? apiMessage
+            : 'Error en el servidor al publicar el comentario. Intenta nuevamente más tarde.'
+        );
+      }
     } finally {
       setCommentSubmitting(false);
     }
@@ -149,14 +183,14 @@ export default function Board() {
   // Filtrado y Ordenamiento
   const processedSuggestions = suggestions
     .filter(item => {
-      const matchesCategory = filterCategory === 'Todas' || 
+      const matchesCategory = filterCategory === 'Todas' ||
         item.categoria.toLowerCase() === filterCategory.toLowerCase();
-      
-      const matchesStatus = filterStatus === 'Todos' || 
+
+      const matchesStatus = filterStatus === 'Todos' ||
         (item.estado || 'Pendiente').toLowerCase().replace(' ', '-') === filterStatus.toLowerCase().replace(' ', '-');
 
       const term = searchTerm.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         (item.titulo || '').toLowerCase().includes(term) ||
         (item.descripcion || '').toLowerCase().includes(term);
 
@@ -166,7 +200,7 @@ export default function Board() {
       if (sortBy === 'votadas') {
         return (b.likes || b.votos || 0) - (a.likes || a.votos || 0);
       }
-      
+
       const dateA = new Date(a.created_at || 0);
       const dateB = new Date(b.created_at || 0);
 
@@ -177,7 +211,7 @@ export default function Board() {
     });
 
   const getCategoryLabel = (cat) => {
-    switch(cat) {
+    switch (cat) {
       case 'Academico': return 'Académico';
       case 'Infraestructura': return 'Infraestructura';
       case 'Convivencia': return 'Convivencia';
@@ -298,10 +332,10 @@ export default function Board() {
           {processedSuggestions.map((item) => {
             const statusNorm = getStatusNormalized(item.estado);
             const displayDate = item.created_at ? item.created_at.split('T')[0] : '2026-07-08';
-            
+
             // Renderizado de autor y evaluación de 'Usuario eliminado'
             const authorInfo = getAuthorInfo(item, user ? user.rol : 'alumno');
-            
+
             // Votación: consultar voto actual del usuario y conteos de likes/dislikes
             const userId = user ? (user.usuario_id || user.cedula) : null;
             const userVote = item.user_vote || api.getUserVote(item.id, userId);
@@ -312,8 +346,8 @@ export default function Board() {
             const isPopular = likesCount >= 5;
 
             return (
-              <div 
-                key={item.id || item.created_at} 
+              <div
+                key={item.id || item.created_at}
                 className={`suggestion-card clickable-card ${statusNorm}`}
                 onClick={(e) => handleOpenCommentsModal(item, e)}
                 title="Haz clic para ver detalles completos y comentarios de la propuesta"
@@ -360,24 +394,24 @@ export default function Board() {
 
                   <div className="card-footer-toolbar">
                     {/* Sección de Autor y Avatar */}
-                    <div 
+                    <div
                       className={`card-author-section ${authorInfo.canInteract && !authorInfo.isDeleted ? 'clickable' : 'anonymous-author'}`}
                       onClick={(e) => handleAuthorClick(authorInfo, e)}
                       title={authorInfo.canInteract && !authorInfo.isDeleted ? `Ver perfil de ${authorInfo.name}` : ''}
                     >
                       {authorInfo.avatar ? (
-                        <img 
-                          src={authorInfo.avatar} 
-                          alt="Avatar" 
-                          className="card-author-avatar" 
+                        <img
+                          src={authorInfo.avatar}
+                          alt="Avatar"
+                          className="card-author-avatar"
                           onError={(e) => {
                             e.target.style.display = 'none';
                             e.target.nextSibling.style.display = 'flex';
                           }}
                         />
                       ) : null}
-                      <span 
-                        className="card-author-avatar-placeholder" 
+                      <span
+                        className="card-author-avatar-placeholder"
                         style={{ display: authorInfo.avatar ? 'none' : 'flex' }}
                       >
                         👤
@@ -393,7 +427,7 @@ export default function Board() {
                     {/* Sistema de Votación Like / Dislike con desmarcado Toggle */}
                     <div className="card-actions-section">
                       <div className="vote-buttons-group">
-                        <button 
+                        <button
                           className={`vote-btn like-btn ${userVote === 'like' ? 'active-like' : ''}`}
                           onClick={(e) => handleVote(item.id, 'like', e)}
                           title={userVote === 'like' ? "Quitar mi voto" : "Apoyar propuesta (Like)"}
@@ -403,7 +437,7 @@ export default function Board() {
                           <span className="vote-count">{likesCount}</span>
                         </button>
 
-                        <button 
+                        <button
                           className={`vote-btn dislike-btn ${userVote === 'dislike' ? 'active-dislike' : ''}`}
                           onClick={(e) => handleVote(item.id, 'dislike', e)}
                           title={userVote === 'dislike' ? "Quitar mi voto" : "No apoyar propuesta (Dislike)"}
@@ -444,7 +478,7 @@ export default function Board() {
         return (
           <div className="modal-backdrop floating-detail-backdrop" onClick={() => setActiveCommentsSug(null)}>
             <div className="modal-content split-detail-modal animate-fadeIn" onClick={(e) => e.stopPropagation()}>
-              
+
               {/* Encabezado del Modal */}
               <div className="modal-header split-modal-header">
                 <div>
@@ -460,11 +494,11 @@ export default function Board() {
 
               {/* Cuerpo Split: Izquierda Detalles, Derecha Comentarios */}
               <div className="split-modal-body">
-                
+
                 {/* COLUMNA IZQUIERDA: Detalles de la Sugerencia */}
                 <div className="split-pane-left">
                   <h2 className="split-sug-title">{activeCommentsSug.titulo}</h2>
-                  
+
                   {/* Autor y Fecha */}
                   <div className="split-author-box">
                     {modalAuthor.avatar ? (
@@ -509,7 +543,7 @@ export default function Board() {
                   <div className="split-voting-bar">
                     <span>¿Qué opinas de esta sugerencia?</span>
                     <div className="vote-buttons-group">
-                      <button 
+                      <button
                         className={`vote-btn like-btn ${modalUserVote === 'like' ? 'active-like' : ''}`}
                         onClick={(e) => handleVote(activeCommentsSug.id, 'like', e)}
                         disabled={votingId === activeCommentsSug.id}
@@ -518,7 +552,7 @@ export default function Board() {
                         <span className="vote-count">{modalLikes} Likes</span>
                       </button>
 
-                      <button 
+                      <button
                         className={`vote-btn dislike-btn ${modalUserVote === 'dislike' ? 'active-dislike' : ''}`}
                         onClick={(e) => handleVote(activeCommentsSug.id, 'dislike', e)}
                         disabled={votingId === activeCommentsSug.id}
@@ -573,9 +607,22 @@ export default function Board() {
                   </div>
 
                   {commentError && (
-                    <div className="alert-banner alert-error" style={{ marginBottom: '0.75rem', fontSize: '0.85rem' }}>
-                      <span>🛑</span>
-                      <span>{commentError}</span>
+                    <div
+                      className={`alert-banner ${commentErrorStatus === 429 ? 'alert-warning' : 'alert-error'}`}
+                      style={{
+                        marginBottom: '0.75rem',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem'
+                      }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>{commentErrorStatus === 429 ? '⏳' : commentErrorStatus === 400 ? '🛑' : '⚠️'}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {commentErrorStatus === 429 && <strong>Límite horario alcanzado (429)</strong>}
+                        {commentErrorStatus === 400 && <strong>Moderación de comentario</strong>}
+                        <span>{commentError}</span>
+                      </div>
                     </div>
                   )}
 

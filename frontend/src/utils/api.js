@@ -210,6 +210,14 @@ export const api = {
   // 2. Crear una nueva sugerencia con envío de header 'x-user-role'
   async createSuggestion({ titulo, descripcion, categoria, usuario_id, es_anonimo = true, foto_url = null, userRole = 'alumno', authorProfile = null }) {
     const headerRole = normalizeRoleForHeader(userRole);
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-user-role': headerRole
+    };
+    if (usuario_id) {
+      headers['x-user-id'] = String(usuario_id);
+    }
+
     const payload = {
       titulo,
       descripcion,
@@ -224,16 +232,16 @@ export const api = {
     try {
       const response = await fetch(`${API_BASE_URL}/sugerencias`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-role': headerRole
-        },
+        headers,
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.error || `Error ${response.status}`);
+        const err = new Error(errorBody.error || `Error ${response.status}`);
+        err.status = response.status;
+        err.response = { status: response.status, data: errorBody };
+        throw err;
       }
 
       const result = await response.json();
@@ -254,12 +262,18 @@ export const api = {
 
       return { data: newSug, source: 'backend' };
     } catch (error) {
-      console.warn('Error al guardar en backend. Guardando localmente:', error.message);
-
-      // Manejar error de lenguaje inapropiado específicamente
-      if (error.message && error.message.includes('inapropiado')) {
+      // Re-lanzar explícitamente errores de moderación (400) y rate limit (429)
+      if (
+        error.status === 400 || 
+        error.status === 429 || 
+        error.response?.status === 400 || 
+        error.response?.status === 429 || 
+        (error.message && (error.message.includes('inapropiado') || error.message.includes('límite') || error.message.includes('alcanzado')))
+      ) {
         throw error;
       }
+
+      console.warn('Error al guardar en backend. Guardando localmente:', error.message);
 
       const simulatedData = {
         id: `sug-${Date.now()}`,
@@ -666,14 +680,18 @@ export const api = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': headerRole
+          'x-user-role': headerRole,
+          'x-user-id': String(usuario_id)
         },
         body: JSON.stringify({ usuario_id, texto })
       });
 
       const resData = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(resData.error || `Error ${response.status}`);
+        const err = new Error(resData.error || `Error ${response.status}`);
+        err.status = response.status;
+        err.response = { status: response.status, data: resData };
+        throw err;
       }
 
       const createdObj = resData.comentario || resData.data;
@@ -685,7 +703,13 @@ export const api = {
 
       return { data: createdObj, source: 'backend' };
     } catch (e) {
-      if (e.message && e.message.includes('inapropiado')) {
+      if (
+        e.status === 400 || 
+        e.status === 429 || 
+        e.response?.status === 400 || 
+        e.response?.status === 429 || 
+        (e.message && (e.message.includes('inapropiado') || e.message.includes('límite') || e.message.includes('alcanzado')))
+      ) {
         throw e;
       }
       console.warn('Error al enviar comentario a backend, guardando localmente:', e.message);
