@@ -39,17 +39,6 @@ const INITIAL_PROFILES = [
     password: 'profesor'
   },
   {
-    usuario_id: 'a36ace40-53f0-4f5c-96d4-bb556e43c8cc',
-    cedula: '0930816400',
-    nombre: 'Sr. Roberto Gómez',
-    rol: 'mantenimiento',
-    correo: 'mantenimiento@montepiedra.edu.ec',
-    curso: 'N/A',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Roberto',
-    isFirstLogin: false,
-    password: 'mantenimiento'
-  },
-  {
     usuario_id: '11d933be-d67b-4fe5-93c8-0ba99d1c2070',
     cedula: '0950764043',
     nombre: 'Lcda. Elizabeth Ponce',
@@ -300,25 +289,8 @@ export function AuthProvider({ children }) {
 
       return { success: true, user: newUser, source: 'backend' };
     } catch (error) {
-      console.warn('Falla en la API Supabase backend al crear usuario, usando fallback local:', error.message);
-      const newUser = {
-        usuario_id: `usr-${Date.now()}`,
-        cedula: cedulaClean,
-        nombre: userData.nombre.trim(),
-        rol: userData.rol.toLowerCase(),
-        correo: userData.correo.trim(),
-        curso: userData.curso ? userData.curso.trim() : 'N/A',
-        avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(userData.nombre)}`,
-        isFirstLogin: true,
-        password: null
-      };
-
-      setProfiles(prev => {
-        const updated = [newUser, ...prev];
-        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
-        return updated;
-      });
-      return { success: true, user: newUser, source: 'local', error: error.message };
+      console.warn('Falla en la API Supabase backend al crear usuario:', error.message);
+      return { success: false, error: error.message };
     }
   };
 
@@ -370,25 +342,8 @@ export function AuthProvider({ children }) {
       });
       return { success: true, count: res.count || newProfiles.length, source: 'backend' };
     } catch (error) {
-      console.warn('Backend importUsersBatch falló, guardando localmente:', error.message);
-      const fallbackItems = newItemsToBackend.map((u, index) => ({
-        usuario_id: `batch-${Date.now()}-${index}`,
-        cedula: u.cedula,
-        nombre: u.nombre,
-        rol: u.rol,
-        correo: u.correo,
-        curso: u.curso,
-        avatar: u.avatar,
-        isFirstLogin: true,
-        password: null
-      }));
-
-      setProfiles(prev => {
-        const updated = [...fallbackItems, ...prev];
-        localStorage.setItem('montepiedra_user_profiles', JSON.stringify(updated));
-        return updated;
-      });
-      return { success: true, count: fallbackItems.length, source: 'local' };
+      console.warn('Backend importUsersBatch falló:', error.message);
+      return { success: false, error: error.message };
     }
   };
 

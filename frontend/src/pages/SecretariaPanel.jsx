@@ -1,6 +1,28 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { validateEcuadorianCedula, formatRole } from '../utils/api';
+import {
+  FileSpreadsheet,
+  Download,
+  Users,
+  UserPlus,
+  FolderUp,
+  Search,
+  UserCheck,
+  GraduationCap,
+  Clock,
+  CheckCircle2,
+  Edit3,
+  Trash2,
+  AlertTriangle,
+  AlertOctagon,
+  Save,
+  FolderOpen,
+  CheckSquare,
+  UploadCloud,
+  X,
+  FileText
+} from 'lucide-react';
 import './Pages.css';
 
 const COURSE_OPTIONS = [
@@ -21,6 +43,7 @@ export default function SecretariaPanel() {
   const [activeTab, setActiveTab] = useState('nomina'); // 'nomina', 'registro', 'archivo'
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('todos');
+  const [filterCourse, setFilterCourse] = useState('todos');
 
   // Formulario individual
   const [formCedula, setFormCedula] = useState('');
@@ -128,7 +151,7 @@ export default function SecretariaPanel() {
     });
 
     if (result.success) {
-      showAlert('success', `Estudiante/Usuario ${formNombre} registrado exitosamente en la nómina y base de datos.`);
+      showAlert('success', `Estudiante/Usuario ${formNombre} registrado exitosamente en la nómina.`);
       setFormCedula('');
       setFormCedulaError('');
       setFormNombre('');
@@ -140,8 +163,7 @@ export default function SecretariaPanel() {
     }
   };
 
-
-  // 2. Procesamiento y Parseo de Archivo (CSV / Excel simulado)
+  // 2. Procesamiento y Parseo de Archivo (CSV / Excel)
   const handleFileUpload = (file) => {
     if (!file) return;
     setSelectedFileName(file.name);
@@ -152,7 +174,6 @@ export default function SecretariaPanel() {
       const lines = text.split(/\r\n|\n/).filter(line => line.trim().length > 0);
       
       const parsed = [];
-      // Si la primera línea tiene encabezados, detectarlos
       const startIndex = lines[0].toLowerCase().includes('cedula') || lines[0].toLowerCase().includes('nombre') ? 1 : 0;
 
       for (let i = startIndex; i < lines.length; i++) {
@@ -177,15 +198,8 @@ export default function SecretariaPanel() {
       }
 
       if (parsed.length === 0) {
-        // Generar plantilla de demostración si el archivo estaba vacío
-        const sampleDemo = [
-          { cedula: '0921122339', nombre: 'Alejandro Morales', correo: 'alejandro.morales@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato', rol: 'alumno' },
-          { cedula: '0922233440', nombre: 'Valeria Castro', correo: 'valeria.castro@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato', rol: 'alumno' },
-          { cedula: '0923344550', nombre: 'Mateo Benítez', correo: 'mateo.benitez@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato', rol: 'alumno' },
-          { cedula: '0924455660', nombre: 'Camila Villacís', correo: 'camila.villacis@alumno.montepiedra.edu.ec', curso: '10mo de Básica', rol: 'alumno' }
-        ];
-        setParsedPreview(sampleDemo);
-        showAlert('info', 'Archivo cargado. Se detectaron 4 registros válidos para importar.');
+        setParsedPreview([]);
+        showAlert('error', 'El archivo cargado no contiene registros válidos o está vacío. Por favor revisa el formato CSV.');
       } else {
         setParsedPreview(parsed);
         showAlert('success', `Archivo leído correctamente. Se encontraron ${parsed.length} registros listos para importar.`);
@@ -207,18 +221,6 @@ export default function SecretariaPanel() {
     } else {
       showAlert('error', 'Error al procesar la importación masiva.');
     }
-  };
-
-  // Cargar plantilla demo
-  const loadDemoFile = () => {
-    setSelectedFileName('Nomina_Estudiantes_2026_Montepiedra.xlsx');
-    setParsedPreview([
-      { cedula: '0925511222', nombre: 'Sebastián Aguirre', correo: 'sebastian.aguirre@alumno.montepiedra.edu.ec', curso: '3ro de Bachillerato A', rol: 'alumno' },
-      { cedula: '0926622333', nombre: 'Fernanda Ortiz', correo: 'fernanda.ortiz@alumno.montepiedra.edu.ec', curso: '2do de Bachillerato B', rol: 'alumno' },
-      { cedula: '0927733444', nombre: 'Esteban Carrera', correo: 'esteban.carrera@alumno.montepiedra.edu.ec', curso: '1ro de Bachillerato A', rol: 'alumno' },
-      { cedula: '0928844554', nombre: 'Andrea Noboa', correo: 'andrea.noboa@alumno.montepiedra.edu.ec', curso: '10mo de Básica C', rol: 'alumno' },
-      { cedula: '0929955664', nombre: 'Ignacio Larrea', correo: 'ignacio.larrea@alumno.montepiedra.edu.ec', curso: '9no de Básica A', rol: 'alumno' }
-    ]);
   };
 
   // Manejar apertura de Modal de Edición de Usuario
@@ -254,7 +256,7 @@ export default function SecretariaPanel() {
 
     const result = await editUser(editingUser.usuario_id, editingUser);
     if (result.success) {
-      showAlert('success', `Datos y foto de ${editingUser.nombre} actualizados correctamente en la base de datos.`);
+      showAlert('success', `Datos de ${editingUser.nombre} actualizados correctamente en la nómina.`);
       setIsEditModalOpen(false);
       setEditingUser(null);
       setEditCedulaError('');
@@ -262,7 +264,6 @@ export default function SecretariaPanel() {
       showAlert('error', 'No se pudieron guardar los cambios del usuario.');
     }
   };
-
 
   // Generar y descargar archivo Guía/Formato CSV
   const handleDownloadCSVGuide = () => {
@@ -283,7 +284,7 @@ export default function SecretariaPanel() {
     setIsCsvGuideModalOpen(true);
   };
 
-  // Filtro de Usuarios en Tabla
+  // Filtro de Usuarios en Tabla (Búsqueda por texto + Rol + Curso o Grado)
   const filteredProfiles = profiles.filter(p => {
     const matchesSearch = 
       (p.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -291,8 +292,9 @@ export default function SecretariaPanel() {
       (p.correo || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesRole = filterRole === 'todos' || p.rol === filterRole;
+    const matchesCourse = filterCourse === 'todos' || (p.curso || '').toLowerCase() === filterCourse.toLowerCase();
 
-    return matchesSearch && matchesRole;
+    return matchesSearch && matchesRole && matchesCourse;
   });
 
   return (
@@ -301,24 +303,27 @@ export default function SecretariaPanel() {
       <div className="page-header">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h1 className="page-title">📑 Panel de Gestión de Nóminas</h1>
+            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <FileSpreadsheet size={28} /> Panel de Gestión de Nóminas
+            </h1>
             <p className="page-subtitle">
-              Administración de matrículas, registro de credenciales por cédula e importación institucional (Secretaría).
+              Administración de matrículas, credenciales por cédula, filtrado escolar e importación de datos (Secretaría).
             </p>
           </div>
           <button 
             className="btn btn-secondary" 
             onClick={exportUsersCSV}
             title="Descargar lista completa de usuarios en formato CSV"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
           >
-            📥 Extraer / Exportar Nómina (CSV)
+            <Download size={15} /> Extraer / Exportar Nómina (CSV)
           </button>
         </div>
       </div>
 
       {alert.message && (
-        <div className={`alert-banner alert-${alert.type === 'error' ? 'error' : 'success'} animate-fadeIn`}>
-          <span>{alert.type === 'error' ? '❌' : '✅'}</span>
+        <div className={`alert-banner alert-${alert.type === 'error' ? 'error' : 'success'} animate-fadeIn`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span>{alert.type === 'error' ? <AlertOctagon size={18} /> : <CheckCircle2 size={18} />}</span>
           <span>{alert.message}</span>
         </div>
       )}
@@ -328,20 +333,23 @@ export default function SecretariaPanel() {
         <button
           className={`sec-tab-btn ${activeTab === 'nomina' ? 'active' : ''}`}
           onClick={() => setActiveTab('nomina')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
         >
-          👥 Nómina Activa ({profiles.length})
+          <Users size={16} /> Nómina Activa ({profiles.length})
         </button>
         <button
           className={`sec-tab-btn ${activeTab === 'registro' ? 'active' : ''}`}
           onClick={() => setActiveTab('registro')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
         >
-          ➕ Registro Individual
+          <UserPlus size={16} /> Registro Individual
         </button>
         <button
           className={`sec-tab-btn ${activeTab === 'archivo' ? 'active' : ''}`}
           onClick={() => setActiveTab('archivo')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
         >
-          📂 Carga Masiva (Excel / CSV)
+          <FolderUp size={16} /> Carga Masiva (Excel / CSV)
         </button>
       </div>
 
@@ -350,7 +358,9 @@ export default function SecretariaPanel() {
         <div className="secretaria-content-card animate-fadeIn">
           <div className="toolbar-container" style={{ marginBottom: '1.5rem' }}>
             <div className="toolbar-search">
-              <span className="toolbar-icon">🔍</span>
+              <span className="toolbar-icon">
+                <Search size={16} />
+              </span>
               <input
                 type="text"
                 placeholder="Buscar por cédula, nombre o correo..."
@@ -360,18 +370,38 @@ export default function SecretariaPanel() {
             </div>
 
             <div className="toolbar-filters">
+              {/* Filtro por Rol */}
               <div className="filter-select-wrapper">
-                <span className="select-icon">🎭</span>
+                <span className="select-icon">
+                  <UserCheck size={15} />
+                </span>
                 <select
                   value={filterRole}
                   onChange={(e) => setFilterRole(e.target.value)}
+                  title="Filtrar por rol institucional"
                 >
                   <option value="todos">Todos los roles</option>
                   <option value="alumno">Alumnos</option>
                   <option value="profesor">Profesores</option>
-                  <option value="mantenimiento">Mantenimiento</option>
                   <option value="secretaria">Secretaría</option>
                   <option value="administrador">Administradores</option>
+                </select>
+              </div>
+
+              {/* Filtro por Cursos o Grados Escolares */}
+              <div className="filter-select-wrapper">
+                <span className="select-icon">
+                  <GraduationCap size={15} />
+                </span>
+                <select
+                  value={filterCourse}
+                  onChange={(e) => setFilterCourse(e.target.value)}
+                  title="Segmentar y buscar estudiantes por curso o grado"
+                >
+                  <option value="todos">Todos los cursos / grados</option>
+                  {COURSE_OPTIONS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -385,7 +415,7 @@ export default function SecretariaPanel() {
                   <th>Usuario / Nombre</th>
                   <th>Rol</th>
                   <th>Correo Institucional</th>
-                  <th>Curso / Área</th>
+                  <th>Curso / Grado</th>
                   <th>Primer Ingreso</th>
                   <th style={{ textAlign: 'center' }}>Acción</th>
                 </tr>
@@ -394,7 +424,7 @@ export default function SecretariaPanel() {
                 {filteredProfiles.length === 0 ? (
                   <tr>
                     <td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>
-                      No se encontraron usuarios que coincidan con la búsqueda.
+                      No se encontraron usuarios que coincidan con los filtros seleccionados.
                     </td>
                   </tr>
                 ) : (
@@ -418,27 +448,33 @@ export default function SecretariaPanel() {
                       <td>{p.curso || 'N/A'}</td>
                       <td>
                         {p.isFirstLogin ? (
-                          <span className="status-pill pending">⏳ Pendiente</span>
+                          <span className="status-pill pending" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Clock size={12} /> Pendiente
+                          </span>
                         ) : (
-                          <span className="status-pill verified">✔️ Activo</span>
+                          <span className="status-pill verified" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <CheckCircle2 size={12} /> Activo
+                          </span>
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.65rem', alignItems: 'center', justifyContent: 'center' }}>
                           <button
                             className="btn btn-secondary"
-                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                             onClick={() => handleOpenEdit(p)}
                             title="Editar datos y foto de perfil"
                           >
-                            ✏️ Editar
+                            <Edit3 size={14} />
+                            <span>Editar</span>
                           </button>
                           <button
                             className="btn-delete-row"
                             onClick={() => handleDelete(p.usuario_id, p.nombre)}
                             title="Eliminar usuario de la nómina"
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.35rem 0.55rem' }}
                           >
-                            🗑️
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -454,7 +490,9 @@ export default function SecretariaPanel() {
       {/* PESTAÑA 2: Registro Individual */}
       {activeTab === 'registro' && (
         <div className="secretaria-content-card animate-fadeIn" style={{ maxWidth: '700px', margin: '0 auto' }}>
-          <h2 className="section-card-title">📝 Alta Individual de Estudiante / Personal</h2>
+          <h2 className="section-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <UserPlus size={22} /> Alta Individual de Estudiante / Personal
+          </h2>
           <p className="section-card-subtitle">
             Ingresa los datos para autorizar el acceso de un nuevo integrante de la comunidad Montepiedra.
           </p>
@@ -472,7 +510,11 @@ export default function SecretariaPanel() {
                 required
                 className={formCedulaError ? 'input-invalid' : ''}
               />
-              {formCedulaError && <p className="input-error-msg">⚠️ {formCedulaError}</p>}
+              {formCedulaError && (
+                <p className="input-error-msg" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <AlertTriangle size={13} /> {formCedulaError}
+                </p>
+              )}
             </div>
 
             <div className="form-group">
@@ -496,7 +538,6 @@ export default function SecretariaPanel() {
               >
                 <option value="alumno">Alumno / Estudiante</option>
                 <option value="profesor">Profesor / Docente</option>
-                <option value="mantenimiento">Mantenimiento</option>
                 <option value="secretaria">Secretaría</option>
                 {!isSecretaria && <option value="administrador">Administrador</option>}
               </select>
@@ -541,19 +582,21 @@ export default function SecretariaPanel() {
                 type="submit" 
                 className="btn btn-primary"
                 disabled={Boolean(formCedulaError) || !formCedula}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               >
-                💾 Registrar en Nómina
+                <Save size={15} /> Registrar en Nómina
               </button>
             </div>
-
           </form>
         </div>
       )}
 
-      {/* PESTAÑA 3: Carga Masiva por Archivo (Excel / CSV) */}
+      {/* PESTAÑA 3: Carga Masiva por Archivo (Excel / CSV) Reorganizada */}
       {activeTab === 'archivo' && (
         <div className="secretaria-content-card animate-fadeIn">
-          <h2 className="section-card-title">📤 Carga Masiva de Nómina Escolar</h2>
+          <h2 className="section-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FolderUp size={22} /> Carga Masiva de Nómina Escolar
+          </h2>
           <p className="section-card-subtitle">
             Sube un archivo de hoja de cálculo (.xlsx, .csv) con la nómina de estudiantes para importarlos automáticamente.
           </p>
@@ -571,7 +614,9 @@ export default function SecretariaPanel() {
               }
             }}
           >
-            <div className="dropzone-icon">📊</div>
+            <div className="dropzone-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+              <FileSpreadsheet size={44} style={{ color: 'var(--color-primary)' }} />
+            </div>
             <h3>Arrastra y suelta aquí tu archivo Excel o CSV</h3>
             <p>o haz clic en el botón para explorar tus documentos</p>
             
@@ -586,28 +631,32 @@ export default function SecretariaPanel() {
                 }
               }}
             />
-            <label htmlFor="file-upload-input" className="btn btn-primary" style={{ cursor: 'pointer', marginTop: '1rem' }}>
-              📁 Seleccionar Archivo
+            <label htmlFor="file-upload-input" className="btn btn-primary" style={{ cursor: 'pointer', marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+              <FolderOpen size={16} /> Seleccionar Archivo
             </label>
           </div>
 
-          {/* Botones de acción e importación masiva */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '1.25rem' }}>
+          {/* Botones de acción reorganizados (Eliminado botón demo, integrado extraer/exportar nómina activa) */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
             <button 
               type="button" 
               className="btn btn-secondary"
               onClick={handleDownloadCSVGuide}
-              style={{ fontSize: '0.9rem', borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+              style={{ fontSize: '0.9rem', borderColor: 'var(--color-primary)', color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
-              📥 Descargar Guía/Formato CSV
+              <FileSpreadsheet size={16} />
+              <span>Descargar Plantilla / Formato CSV</span>
             </button>
+
             <button 
               type="button" 
               className="btn btn-secondary"
-              onClick={loadDemoFile}
-              style={{ fontSize: '0.9rem' }}
+              onClick={exportUsersCSV}
+              style={{ fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              title="Descargar nómina actual completa en formato CSV"
             >
-              ⚡ Cargar Archivo Demo de Prueba (5 Estudiantes)
+              <Download size={16} />
+              <span>Extraer / Exportar Nómina Activa (CSV)</span>
             </button>
           </div>
 
@@ -616,8 +665,8 @@ export default function SecretariaPanel() {
             <div className="batch-preview-container animate-fadeIn" style={{ marginTop: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
-                  <h3 style={{ color: 'var(--color-primary)', margin: 0 }}>
-                    📋 Previsualización: {selectedFileName} ({parsedPreview.length} registros detectados)
+                  <h3 style={{ color: 'var(--color-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <CheckSquare size={18} /> Previsualización: {selectedFileName} ({parsedPreview.length} registros detectados)
                   </h3>
                   <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', margin: 0 }}>
                     Revisa las columnas antes de confirmar la inserción a la nómina institucional.
@@ -627,8 +676,9 @@ export default function SecretariaPanel() {
                 <button 
                   className="btn btn-primary"
                   onClick={handleConfirmBatchImport}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  🚀 Confirmar e Importar Nómina
+                  <UploadCloud size={16} /> Confirmar e Importar Nómina
                 </button>
               </div>
 
@@ -662,13 +712,18 @@ export default function SecretariaPanel() {
           )}
         </div>
       )}
-      {/* MODAL 1: Editar Datos y Foto de Perfil de Usuario */}
+
+      {/* MODAL 1: Editar Datos de Usuario */}
       {isEditModalOpen && editingUser && (
-        <div className="modal-backdrop">
-          <div className="modal-content animate-fadeIn" style={{ maxWidth: '600px' }}>
+        <div className="modal-backdrop" onClick={() => setIsEditModalOpen(false)}>
+          <div className="modal-content animate-fadeIn" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>✏️ Editar Usuario y Foto de Perfil</h2>
-              <button className="modal-close" onClick={() => setIsEditModalOpen(false)}>✕</button>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Edit3 size={20} /> Editar Usuario y Perfil
+              </h2>
+              <button className="modal-close" onClick={() => setIsEditModalOpen(false)} aria-label="Cerrar modal">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleSaveEditUser}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '1rem', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)' }}>
@@ -701,7 +756,11 @@ export default function SecretariaPanel() {
                   required
                   className={editCedulaError ? 'input-invalid' : ''}
                 />
-                {editCedulaError && <p className="input-error-msg">⚠️ {editCedulaError}</p>}
+                {editCedulaError && (
+                  <p className="input-error-msg" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <AlertTriangle size={13} /> {editCedulaError}
+                  </p>
+                )}
               </div>
 
               <div className="form-group">
@@ -724,7 +783,6 @@ export default function SecretariaPanel() {
                 >
                   <option value="alumno">Alumno</option>
                   <option value="profesor">Profesor</option>
-                  <option value="mantenimiento">Mantenimiento</option>
                   <option value="secretaria">Secretaria</option>
                   {!isSecretaria && <option value="administrador">Administrador</option>}
                 </select>
@@ -768,11 +826,11 @@ export default function SecretariaPanel() {
                   type="submit" 
                   className="btn btn-primary"
                   disabled={Boolean(editCedulaError) || !editingUser.cedula}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                 >
-                  💾 Guardar Cambios
+                  <Save size={15} /> Guardar Cambios
                 </button>
               </div>
-
             </form>
           </div>
         </div>
@@ -780,11 +838,15 @@ export default function SecretariaPanel() {
 
       {/* MODAL 2: Guía de Formato CSV */}
       {isCsvGuideModalOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content animate-fadeIn" style={{ maxWidth: '650px' }}>
+        <div className="modal-backdrop" onClick={() => setIsCsvGuideModalOpen(false)}>
+          <div className="modal-content animate-fadeIn" style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>📋 Guía y Formato Oficial de Importación CSV</h2>
-              <button className="modal-close" onClick={() => setIsCsvGuideModalOpen(false)}>✕</button>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileText size={20} /> Guía y Formato Oficial de Importación CSV
+              </h2>
+              <button className="modal-close" onClick={() => setIsCsvGuideModalOpen(false)} aria-label="Cerrar modal">
+                <X size={18} />
+              </button>
             </div>
             <div style={{ padding: '0.5rem 0' }}>
               <p>El sistema acepta archivos <code>.csv</code> o <code>.xlsx</code> con las siguientes 5 cabeceras obligatorias:</p>
@@ -798,7 +860,7 @@ export default function SecretariaPanel() {
                 <li><strong>Nombre:</strong> Nombres y apellidos completos.</li>
                 <li><strong>Correo:</strong> Debe terminar en <code>@alumno.montepiedra.edu.ec</code> o <code>@montepiedra.edu.ec</code>.</li>
                 <li><strong>Curso:</strong> Utilizar etiquetas estándar: <em>8vo de Básica, 9no de Básica, 10mo de Básica, 1ro de Bachillerato, 2do de Bachillerato, 3ro de Bachillerato</em>.</li>
-                <li><strong>Rol:</strong> <em>alumno, profesor, mantenimiento, secretaria, administrador</em>.</li>
+                <li><strong>Rol:</strong> <em>alumno, profesor, secretaria, administrador</em>.</li>
               </ul>
             </div>
             <div className="modal-footer">

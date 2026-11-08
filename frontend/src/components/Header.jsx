@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { Moon, Sun } from 'lucide-react';
 import styles from './Header.module.css';
 
 export default function Header() {
@@ -18,7 +19,6 @@ export default function Header() {
       case 'profesor': return 'Profesor';
       case 'administrador':
       case 'admin': return 'Administrador';
-      case 'mantenimiento': return 'Mantenimiento';
       case 'secretaria': return 'Secretaría';
       default: return rol;
     }
@@ -45,7 +45,9 @@ export default function Header() {
             aria-label="Alternar modo oscuro"
             title={theme === 'light' ? 'Activar Modo Oscuro' : 'Activar Modo Claro'}
           >
-            <span className={styles.toggleIcon}>{theme === 'light' ? '🌙' : '☀️'}</span>
+            <span className={styles.toggleIcon} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </span>
           </button>
 
           {/* Widget de Usuario y Avatar */}

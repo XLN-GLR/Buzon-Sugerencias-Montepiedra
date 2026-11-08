@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
+import { 
+  FileText, 
+  Send, 
+  CheckCircle2, 
+  Clock, 
+  AlertOctagon, 
+  AlertTriangle 
+} from 'lucide-react';
 import './Pages.css';
 
 export default function SuggestionForm() {
@@ -12,7 +20,6 @@ export default function SuggestionForm() {
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [saveSource, setSaveSource] = useState('backend');
   const [errorMessage, setErrorMessage] = useState('');
   const [errorStatus, setErrorStatus] = useState(null);
 
@@ -52,7 +59,6 @@ export default function SuggestionForm() {
       setErrorStatus(null);
 
       // Actualizar estado de éxito
-      setSaveSource(result.isSimulated ? 'local' : 'backend');
       setSubmitted(true);
 
       setTimeout(() => {
@@ -68,7 +74,7 @@ export default function SuggestionForm() {
         setErrorStatus(429);
         setErrorMessage(
           apiMessage || 
-          '⏳ Has alcanzado el límite de 1 sugerencia cada 24 horas. Por favor, intenta de nuevo más tarde.'
+          'Has alcanzado el límite de 1 sugerencia cada 24 horas. Por favor, intenta de nuevo más tarde.'
         );
         // NOTA: Se preserva el título y la descripción intactos en los campos del formulario
       } 
@@ -77,7 +83,7 @@ export default function SuggestionForm() {
         setErrorStatus(400);
         setErrorMessage(
           apiMessage || 
-          '⚠️ ¡ATENCIÓN! Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.'
+          'Atención: Tu sugerencia contiene lenguaje inapropiado o palabras ofensivas. El Buzón de Sugerencias Montepiedra exige un vocabulario respetuoso e institucional.'
         );
       } 
       // 3. Error de servidor u otros (HTTP 500)
@@ -97,7 +103,10 @@ export default function SuggestionForm() {
   return (
     <div className="container">
       <div className="page-header" style={{ textAlign: 'center' }}>
-        <h1 className="page-title">✍️ Nueva Sugerencia</h1>
+        <h1 className="page-title" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+          <FileText size={28} />
+          Nueva Sugerencia
+        </h1>
         <p className="page-subtitle">
           Envía tus comentarios o propuestas para ayudarnos a mejorar cada día.
         </p>
@@ -105,13 +114,9 @@ export default function SuggestionForm() {
 
       <div className="form-container">
         {submitted && (
-          <div className="alert-banner alert-success">
-            <span>✅</span>
-            <span>
-              {saveSource === 'backend' 
-                ? '¡Tu sugerencia ha sido enviada con éxito al servidor y guardada en Supabase!' 
-                : '¡Sugerencia guardada con éxito (Modo local sincronizado)! Ya es visible en el tablero.'}
-            </span>
+          <div className="alert-banner alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <CheckCircle2 size={20} color="#059669" />
+            <span>¡Tu sugerencia ha sido enviada con éxito al servidor y guardada en Supabase!</span>
           </div>
         )}
 
@@ -120,9 +125,15 @@ export default function SuggestionForm() {
             className={`alert-banner ${errorStatus === 429 ? 'alert-warning' : 'alert-error'}`} 
             style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
           >
-            <span style={{ fontSize: '1.25rem' }}>
-              {errorStatus === 429 ? '⏳' : errorStatus === 400 ? '🛑' : '⚠️'}
-            </span>
+            <div style={{ marginTop: '0.15rem', flexShrink: 0 }}>
+              {errorStatus === 429 ? (
+                <Clock size={20} color="#D97706" />
+              ) : errorStatus === 400 ? (
+                <AlertOctagon size={20} color="#DC2626" />
+              ) : (
+                <AlertTriangle size={20} color="#DC2626" />
+              )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               {errorStatus === 429 && <strong>Límite de participación alcanzado (429)</strong>}
               {errorStatus === 400 && <strong>Moderación de contenido institucional</strong>}
@@ -217,9 +228,10 @@ export default function SuggestionForm() {
             <button 
               type="submit" 
               className="btn btn-primary" 
-              style={{ width: '100%' }}
+              style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               disabled={loading}
             >
+              <Send size={18} />
               {loading ? 'Validando y Enviando...' : 'Enviar Sugerencia al Buzón'}
             </button>
           </div>

@@ -1,8 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, getAuthorInfo, formatRole } from '../utils/api';
+import { 
+  MessageCircle, 
+  ThumbsUp, 
+  ThumbsDown, 
+  Search, 
+  Tag, 
+  CheckSquare, 
+  ArrowUpDown, 
+  Flame, 
+  RefreshCw, 
+  X, 
+  Send, 
+  Clock, 
+  AlertOctagon, 
+  AlertTriangle, 
+  CheckCircle2, 
+  User, 
+  Wifi, 
+  ChevronLeft, 
+  ChevronRight,
+  MessageSquare
+} from 'lucide-react';
 import './Pages.css';
+
+const ITEMS_PER_PAGE = 6;
 
 export default function Board() {
   const { user } = useAuth();
@@ -10,13 +34,18 @@ export default function Board() {
 
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [apiSource, setApiSource] = useState('local');
   const [filterCategory, setFilterCategory] = useState('Todas');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('recientes'); // 'recientes', 'antiguas', 'votadas'
   const [errorMessage, setErrorMessage] = useState('');
   const [votingId, setVotingId] = useState(null);
+
+  // Paginación estricta de 6 sugerencias por página
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Registro en tiempo real de conteo de comentarios por sugerencia { [id]: count }
+  const [commentCounts, setCommentCounts] = useState({});
 
   // Estados para el Modal Flotante de Detalles y Comentarios Split
   const [activeCommentsSug, setActiveCommentsSug] = useState(null);
@@ -27,16 +56,52 @@ export default function Board() {
   const [commentErrorStatus, setCommentErrorStatus] = useState(null);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
+  const syncCommentCountsFromBackend = async (items) => {
+    if (!items || items.length === 0) return;
+    try {
+      const userRole = user ? user.rol : 'alumno';
+      const results = await Promise.allSettled(
+        items.map(async (item) => {
+          const res = await api.getComments(item.id, userRole);
+          const list = res.data || [];
+          return { id: item.id, count: list.length };
+        })
+      );
+
+      const serverCounts = {};
+      results.forEach((r) => {
+        if (r.status === 'fulfilled' && r.value) {
+          serverCounts[r.value.id] = r.value.count;
+        }
+      });
+
+      setCommentCounts(prev => ({
+        ...prev,
+        ...serverCounts
+      }));
+    } catch (e) {
+      console.warn('Error al sincronizar conteos de comentarios con el servidor:', e);
+    }
+  };
 
   const loadSuggestions = async () => {
     setLoading(true);
     setErrorMessage('');
     try {
-      // 1. Envío de rol y ID del usuario para evaluar estado inicial de sus votos
       const userId = user ? (user.usuario_id || user.cedula) : null;
       const result = await api.getSuggestions(user ? user.rol : 'alumno', userId);
-      setSuggestions(result.data);
-      setApiSource(result.source);
+      const suggestionsData = result.data || [];
+      setSuggestions(suggestionsData);
+
+      // Cargar conteos inmediatos de comentarios desde la caché local para renderizado sin parpadeos
+      const counts = {};
+      for (const item of suggestionsData) {
+        counts[item.id] = api.getCommentCount(item.id);
+      }
+      setCommentCounts(counts);
+
+      // Sincronizar en segundo plano con el servidor para obtener los conteos exactos de todos los comentarios anteriores
+      syncCommentCountsFromBackend(suggestionsData);
     } catch (err) {
       setErrorMessage('No se pudieron cargar las sugerencias del servidor.');
     } finally {
@@ -48,7 +113,12 @@ export default function Board() {
     loadSuggestions();
   }, [user]);
 
-  // Manejo de votación con Toggle (desmarcar o cambiar voto) y actualización en tiempo real de Likes y Dislikes
+  // Resetear paginación al cambiar criterios de búsqueda o filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, filterStatus, sortBy]);
+
+  // Manejo de votación con Toggle
   const handleVote = async (id, voteType, e) => {
     if (e) e.stopPropagation();
     if (!user) return;
@@ -78,7 +148,6 @@ export default function Board() {
         })
       );
 
-      // Actualizar modal si está abierto para esta sugerencia
       if (activeCommentsSug && activeCommentsSug.id === id) {
         setActiveCommentsSug(prev => ({
           ...prev,
@@ -101,8 +170,15 @@ export default function Board() {
     setNewCommentText('');
 
     const res = await api.getComments(sug.id, user ? user.rol : 'alumno');
-    setComments(res.data || []);
+    const fetchedComments = res.data || [];
+    setComments(fetchedComments);
     setCommentsLoading(false);
+
+    // Actualizar conteo en tiempo real
+    setCommentCounts(prev => ({
+      ...prev,
+      [sug.id]: fetchedComments.length
+    }));
   };
 
   // Enviar comentario
@@ -131,7 +207,22 @@ export default function Board() {
         }
       };
 
-      setComments(prev => [...prev, addedComment]);
+      setComments(prev => {
+        const updated = [...prev, addedComment];
+        // Sincronizar en localStorage inmediatamente con la lista completa actualizada
+        try {
+          localStorage.setItem(`comments_${activeCommentsSug.id}`, JSON.stringify(updated));
+        } catch (err) {
+          console.warn('Error al persistir comments en localStorage:', err);
+        }
+        // Actualizar el contador numérico de comentarios en tiempo real
+        setCommentCounts(cPrev => ({
+          ...cPrev,
+          [activeCommentsSug.id]: updated.length
+        }));
+        return updated;
+      });
+
       setNewCommentText('');
       setCommentError('');
       setCommentErrorStatus(null);
@@ -140,25 +231,19 @@ export default function Board() {
       const apiMessage = err.response?.data?.error || err.data?.error || err.message;
       setCommentErrorStatus(status);
 
-      // 1. Manejo específico de Rate Limit (HTTP 429)
       if (status === 429 || (apiMessage && (apiMessage.includes('límite') || apiMessage.includes('hora')))) {
         setCommentErrorStatus(429);
         setCommentError(
           apiMessage ||
-          '⏳ Has alcanzado el límite de 5 comentarios por hora. Por favor, espera antes de publicar nuevos comentarios.'
+          'Has alcanzado el límite de 5 comentarios por hora. Por favor, espera antes de publicar nuevos comentarios.'
         );
-        // NOTA: Se preserva el texto escrito en newCommentText sin vaciar el input
-      }
-      // 2. Manejo de contenido inapropiado (HTTP 400)
-      else if (status === 400 || (apiMessage && apiMessage.toLowerCase().includes('inapropiado'))) {
+      } else if (status === 400 || (apiMessage && apiMessage.toLowerCase().includes('inapropiado'))) {
         setCommentErrorStatus(400);
         setCommentError(
           apiMessage ||
-          '⚠️ ¡ATENCIÓN! Tu comentario contiene lenguaje inapropiado. Por favor, utiliza un vocabulario respetuoso.'
+          '¡ATENCIÓN! Tu comentario contiene lenguaje inapropiado. Por favor, utiliza un vocabulario respetuoso.'
         );
-      }
-      // 3. Error de servidor u otros (HTTP 500)
-      else {
+      } else {
         setCommentErrorStatus(status || 500);
         setCommentError(
           apiMessage && !apiMessage.startsWith('Error ') && apiMessage !== 'Failed to fetch'
@@ -171,7 +256,6 @@ export default function Board() {
     }
   };
 
-  // Redirección al perfil si el usuario no es anónimo ni eliminado
   const handleAuthorClick = (authorInfo, e) => {
     if (e) e.stopPropagation();
     if (!authorInfo.canInteract || authorInfo.isDeleted || authorInfo.isAnonymous) {
@@ -210,6 +294,13 @@ export default function Board() {
       return dateB - dateA;
     });
 
+  // Paginación estricta a 6 elementos por página
+  const totalPages = Math.ceil(processedSuggestions.length / ITEMS_PER_PAGE) || 1;
+  const paginatedSuggestions = processedSuggestions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const getCategoryLabel = (cat) => {
     switch (cat) {
       case 'Academico': return 'Académico';
@@ -235,24 +326,18 @@ export default function Board() {
 
         {/* Indicador de Conexión */}
         <div style={{ marginTop: '0.75rem', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
-          {apiSource === 'backend' ? (
-            <span className="status-indicator backend-online">
-              🟢 Conectado a Supabase API
-            </span>
-          ) : (
-            <span className="status-indicator backend-offline" title="Cargado desde el almacenamiento local">
-              🟡 Modo Local (Offline Sincronizado)
-            </span>
-          )}
-          <button onClick={loadSuggestions} className="btn-refresh" title="Actualizar sugerencias">
-            🔄 Recargar
+          <span className="status-indicator backend-online" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Wifi size={14} /> Conectado al Servidor (Supabase)
+          </span>
+          <button onClick={loadSuggestions} className="btn-refresh" title="Actualizar sugerencias" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+            <RefreshCw size={13} /> Recargar
           </button>
         </div>
       </div>
 
       {errorMessage && (
-        <div className="alert-banner alert-error">
-          <span>❌</span>
+        <div className="alert-banner alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <AlertOctagon size={18} />
           <span>{errorMessage}</span>
         </div>
       )}
@@ -260,7 +345,9 @@ export default function Board() {
       {/* Barra de Filtros y Búsqueda */}
       <div className="toolbar-container">
         <div className="toolbar-search">
-          <span className="toolbar-icon">🔍</span>
+          <span className="toolbar-icon">
+            <Search size={16} />
+          </span>
           <input
             type="text"
             placeholder="Buscar propuestas por palabras clave..."
@@ -271,7 +358,9 @@ export default function Board() {
 
         <div className="toolbar-filters">
           <div className="filter-select-wrapper">
-            <span className="select-icon">🏷️</span>
+            <span className="select-icon">
+              <Tag size={15} />
+            </span>
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
@@ -286,7 +375,9 @@ export default function Board() {
           </div>
 
           <div className="filter-select-wrapper">
-            <span className="select-icon">🚦</span>
+            <span className="select-icon">
+              <CheckSquare size={15} />
+            </span>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -302,7 +393,9 @@ export default function Board() {
           </div>
 
           <div className="filter-select-wrapper">
-            <span className="select-icon">📊</span>
+            <span className="select-icon">
+              <ArrowUpDown size={15} />
+            </span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -328,146 +421,186 @@ export default function Board() {
           </p>
         </div>
       ) : (
-        <div className="suggestions-grid">
-          {processedSuggestions.map((item) => {
-            const statusNorm = getStatusNormalized(item.estado);
-            const displayDate = item.created_at ? item.created_at.split('T')[0] : '2026-07-08';
+        <>
+          <div className="suggestions-grid">
+            {paginatedSuggestions.map((item) => {
+              const statusNorm = getStatusNormalized(item.estado);
+              const displayDate = item.created_at ? item.created_at.split('T')[0] : '2026-07-08';
+              const authorInfo = getAuthorInfo(item, user ? user.rol : 'alumno');
+              const userId = user ? (user.usuario_id || user.cedula) : null;
+              const userVote = item.user_vote || api.getUserVote(item.id, userId);
+              const likesCount = item.likes !== undefined ? item.likes : (item.votos || 0);
+              const dislikesCount = item.dislikes || 0;
+              const isPopular = likesCount >= 5;
+              const currentItemComments = commentCounts[item.id] !== undefined 
+                ? commentCounts[item.id] 
+                : api.getCommentCount(item.id);
 
-            // Renderizado de autor y evaluación de 'Usuario eliminado'
-            const authorInfo = getAuthorInfo(item, user ? user.rol : 'alumno');
-
-            // Votación: consultar voto actual del usuario y conteos de likes/dislikes
-            const userId = user ? (user.usuario_id || user.cedula) : null;
-            const userVote = item.user_vote || api.getUserVote(item.id, userId);
-            const likesCount = item.likes !== undefined ? item.likes : (item.votos || 0);
-            const dislikesCount = item.dislikes || 0;
-
-            // Etiqueta dinámica de popularidad
-            const isPopular = likesCount >= 5;
-
-            return (
-              <div
-                key={item.id || item.created_at}
-                className={`suggestion-card clickable-card ${statusNorm}`}
-                onClick={(e) => handleOpenCommentsModal(item, e)}
-                title="Haz clic para ver detalles completos y comentarios de la propuesta"
-              >
-                <div>
-                  {/* Top Badges (Categoría, Popularidad, Estado) */}
-                  <div className="card-top">
-                    <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span className={`badge badge-${(item.categoria || 'otros').toLowerCase()}`}>
-                        {getCategoryLabel(item.categoria)}
-                      </span>
-                      {isPopular && (
-                        <span className="badge badge-popular animate-pulse" title="¡Propuesta muy votada por la comunidad!">
-                          🔥 Popular
+              return (
+                <div
+                  key={item.id || item.created_at}
+                  className={`suggestion-card clickable-card ${statusNorm}`}
+                  onClick={(e) => handleOpenCommentsModal(item, e)}
+                  title="Haz clic para ver detalles completos y comentarios de la propuesta"
+                >
+                  <div>
+                    {/* Top Badges */}
+                    <div className="card-top">
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className={`badge badge-${(item.categoria || 'otros').toLowerCase()}`}>
+                          {getCategoryLabel(item.categoria)}
                         </span>
-                      )}
+                        {isPopular && (
+                          <span className="badge badge-popular animate-pulse" title="¡Propuesta muy votada por la comunidad!">
+                            <Flame size={12} style={{ marginRight: '0.2rem' }} /> Popular
+                          </span>
+                        )}
+                      </div>
+                      <span className={`status-badge status-${statusNorm}`}>
+                        {item.estado || 'Pendiente'}
+                      </span>
                     </div>
-                    <span className={`status-badge status-${statusNorm}`}>
-                      {item.estado || 'Pendiente'}
-                    </span>
+
+                    <h3 className="card-title">{item.titulo}</h3>
+                    <p className="card-desc">{item.descripcion}</p>
+
+                    {item.foto_url && (
+                      <div className="card-image-preview">
+                        <img src={item.foto_url} alt={item.titulo} className="card-media-thumbnail" />
+                      </div>
+                    )}
                   </div>
 
-                  <h3 className="card-title">{item.titulo}</h3>
-                  <p className="card-desc">{item.descripcion}</p>
-
-                  {/* Imagen adjunta si existe */}
-                  {item.foto_url && (
-                    <div className="card-image-preview">
-                      <img src={item.foto_url} alt={item.titulo} className="card-media-thumbnail" />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  {/* Respuesta oficial del moderador */}
-                  {item.respuesta_moderador && (
-                    <div className="card-response">
-                      <div className="response-header">
-                        <span>💬</span> Respuesta Institucional:
+                  <div>
+                    {item.respuesta_moderador && (
+                      <div className="card-response">
+                        <div className="response-header">
+                          <MessageSquare size={14} style={{ marginRight: '0.35rem' }} /> Respuesta Institucional:
+                        </div>
+                        <p className="response-text">"{item.respuesta_moderador}"</p>
                       </div>
-                      <p className="response-text">"{item.respuesta_moderador}"</p>
-                    </div>
-                  )}
+                    )}
 
-                  <div className="card-footer-toolbar">
-                    {/* Sección de Autor y Avatar */}
-                    <div
-                      className={`card-author-section ${authorInfo.canInteract && !authorInfo.isDeleted ? 'clickable' : 'anonymous-author'}`}
-                      onClick={(e) => handleAuthorClick(authorInfo, e)}
-                      title={authorInfo.canInteract && !authorInfo.isDeleted ? `Ver perfil de ${authorInfo.name}` : ''}
-                    >
-                      {authorInfo.avatar ? (
-                        <img
-                          src={authorInfo.avatar}
-                          alt="Avatar"
-                          className="card-author-avatar"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <span
-                        className="card-author-avatar-placeholder"
-                        style={{ display: authorInfo.avatar ? 'none' : 'flex' }}
+                    <div className="card-footer-toolbar">
+                      {/* Autor y Avatar */}
+                      <div
+                        className={`card-author-section ${authorInfo.canInteract && !authorInfo.isDeleted ? 'clickable' : 'anonymous-author'}`}
+                        onClick={(e) => handleAuthorClick(authorInfo, e)}
+                        title={authorInfo.canInteract && !authorInfo.isDeleted ? `Ver perfil de ${authorInfo.name}` : ''}
                       >
-                        👤
-                      </span>
-                      <span>
-                        Por:{' '}
-                        <strong className={`card-author ${authorInfo.isDeleted ? 'author-deleted' : ''}`}>
-                          {authorInfo.name}
-                        </strong>
-                      </span>
-                    </div>
-
-                    {/* Sistema de Votación Like / Dislike con desmarcado Toggle */}
-                    <div className="card-actions-section">
-                      <div className="vote-buttons-group">
-                        <button
-                          className={`vote-btn like-btn ${userVote === 'like' ? 'active-like' : ''}`}
-                          onClick={(e) => handleVote(item.id, 'like', e)}
-                          title={userVote === 'like' ? "Quitar mi voto" : "Apoyar propuesta (Like)"}
-                          disabled={votingId === item.id}
+                        {authorInfo.avatar ? (
+                          <img
+                            src={authorInfo.avatar}
+                            alt="Avatar"
+                            className="card-author-avatar"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <span
+                          className="card-author-avatar-placeholder"
+                          style={{ display: authorInfo.avatar ? 'none' : 'flex' }}
                         >
-                          <span className="vote-icon">👍</span>
-                          <span className="vote-count">{likesCount}</span>
-                        </button>
-
-                        <button
-                          className={`vote-btn dislike-btn ${userVote === 'dislike' ? 'active-dislike' : ''}`}
-                          onClick={(e) => handleVote(item.id, 'dislike', e)}
-                          title={userVote === 'dislike' ? "Quitar mi voto" : "No apoyar propuesta (Dislike)"}
-                          disabled={votingId === item.id}
-                        >
-                          <span className="vote-icon">👎</span>
-                          <span className="vote-count">{dislikesCount}</span>
-                        </button>
-
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                          onClick={(e) => handleOpenCommentsModal(item, e)}
-                          title="Ver detalles completos y añadir comentarios"
-                        >
-                          💬 Detalle
-                        </button>
+                          <User size={13} />
+                        </span>
+                        <span>
+                          Por:{' '}
+                          <strong className={`card-author ${authorInfo.isDeleted ? 'author-deleted' : ''}`}>
+                            {authorInfo.name}
+                          </strong>
+                        </span>
                       </div>
 
-                      <span className="card-date-label">{displayDate}</span>
+                      {/* Votación y Botón de Comentarios Interactivo Estilo Red Social */}
+                      <div className="card-actions-section">
+                        <div className="vote-buttons-group">
+                          <button
+                            className={`vote-btn like-btn ${userVote === 'like' ? 'active-like' : ''}`}
+                            onClick={(e) => handleVote(item.id, 'like', e)}
+                            title={userVote === 'like' ? "Quitar mi voto" : "Apoyar propuesta (Like)"}
+                            disabled={votingId === item.id}
+                          >
+                            <span className="vote-icon">
+                              <ThumbsUp size={14} />
+                            </span>
+                            <span className="vote-count">{likesCount}</span>
+                          </button>
+
+                          <button
+                            className={`vote-btn dislike-btn ${userVote === 'dislike' ? 'active-dislike' : ''}`}
+                            onClick={(e) => handleVote(item.id, 'dislike', e)}
+                            title={userVote === 'dislike' ? "Quitar mi voto" : "No apoyar propuesta (Dislike)"}
+                            disabled={votingId === item.id}
+                          >
+                            <span className="vote-icon">
+                              <ThumbsDown size={14} />
+                            </span>
+                            <span className="vote-count">{dislikesCount}</span>
+                          </button>
+
+                          {/* Botón de Comentarios Interactivo estilo Instagram / TikTok */}
+                          <button
+                            className="social-comment-btn"
+                            onClick={(e) => handleOpenCommentsModal(item, e)}
+                            title="Ver detalles e hilo de comentarios"
+                          >
+                            <MessageCircle size={15} className="social-comment-icon" />
+                            <span className="social-comment-count">{currentItemComments}</span>
+                          </button>
+                        </div>
+
+                        <span className="card-date-label">{displayDate}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* Barra de Paginación Estricta (Máximo 6 sugerencias por página) */}
+          {totalPages > 1 && (
+            <div className="pagination-wrapper">
+              <button
+                className="pagination-nav-btn"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                title="Página anterior"
+              >
+                <ChevronLeft size={16} />
+                <span>Anterior</span>
+              </button>
+
+              <div className="pagination-numbers-group">
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    className={`pagination-num-btn ${currentPage === pageNum ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                    title={`Ir a página ${pageNum}`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
               </div>
-            );
-          })}
-        </div>
+
+              <button
+                className="pagination-nav-btn"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                title="Página siguiente"
+              >
+                <span>Siguiente</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* MODAL FLOTANTE DE DETALLES Y COMENTARIOS (SPLIT SCREEN CON BACKDROP BLUR) */}
+      {/* MODAL FLOTANTE DE DETALLES Y COMENTARIOS SPLIT SCREEN */}
       {activeCommentsSug && (() => {
         const modalAuthor = getAuthorInfo(activeCommentsSug, user ? user.rol : 'alumno');
         const modalUserVote = activeCommentsSug.user_vote || (user ? api.getUserVote(activeCommentsSug.id, user.usuario_id || user.cedula) : null);
@@ -489,7 +622,9 @@ export default function Board() {
                     {activeCommentsSug.estado || 'Pendiente'}
                   </span>
                 </div>
-                <button className="modal-close" onClick={() => setActiveCommentsSug(null)}>✕</button>
+                <button className="modal-close" onClick={() => setActiveCommentsSug(null)} aria-label="Cerrar modal">
+                  <X size={18} />
+                </button>
               </div>
 
               {/* Cuerpo Split: Izquierda Detalles, Derecha Comentarios */}
@@ -504,7 +639,9 @@ export default function Board() {
                     {modalAuthor.avatar ? (
                       <img src={modalAuthor.avatar} alt="Avatar" className="card-author-avatar" />
                     ) : (
-                      <span className="card-author-avatar-placeholder">👤</span>
+                      <span className="card-author-avatar-placeholder">
+                        <User size={14} />
+                      </span>
                     )}
                     <div>
                       <strong className={modalAuthor.isDeleted ? 'author-deleted' : ''}>
@@ -533,7 +670,7 @@ export default function Board() {
                   {activeCommentsSug.respuesta_moderador && (
                     <div className="card-response" style={{ marginTop: '1rem' }}>
                       <div className="response-header">
-                        <span>💬</span> Respuesta Institucional:
+                        <MessageSquare size={14} style={{ marginRight: '0.35rem' }} /> Respuesta Institucional:
                       </div>
                       <p className="response-text">"{activeCommentsSug.respuesta_moderador}"</p>
                     </div>
@@ -548,7 +685,9 @@ export default function Board() {
                         onClick={(e) => handleVote(activeCommentsSug.id, 'like', e)}
                         disabled={votingId === activeCommentsSug.id}
                       >
-                        <span className="vote-icon">👍</span>
+                        <span className="vote-icon">
+                          <ThumbsUp size={14} />
+                        </span>
                         <span className="vote-count">{modalLikes} Likes</span>
                       </button>
 
@@ -557,7 +696,9 @@ export default function Board() {
                         onClick={(e) => handleVote(activeCommentsSug.id, 'dislike', e)}
                         disabled={votingId === activeCommentsSug.id}
                       >
-                        <span className="vote-icon">👎</span>
+                        <span className="vote-icon">
+                          <ThumbsDown size={14} />
+                        </span>
                         <span className="vote-count">{modalDislikes} Dislikes</span>
                       </button>
                     </div>
@@ -566,7 +707,10 @@ export default function Board() {
 
                 {/* COLUMNA DERECHA: Sistema de Comentarios */}
                 <div className="split-pane-right">
-                  <h3 className="comments-pane-title">💬 Comentarios Comunitarios ({comments.length})</h3>
+                  <h3 className="comments-pane-title">
+                    <MessageCircle size={17} style={{ marginRight: '0.4rem', verticalAlign: 'text-bottom' }} />
+                    Comentarios ({comments.length})
+                  </h3>
 
                   <div className="comments-list-scroll">
                     {commentsLoading ? (
@@ -576,7 +720,7 @@ export default function Board() {
                       </div>
                     ) : comments.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
-                        <p>💬 No hay comentarios aún. ¡Sé el primero en aportar a esta propuesta!</p>
+                        <p>No hay comentarios aún. ¡Sé el primero en aportar a esta propuesta!</p>
                       </div>
                     ) : (
                       comments.map((com, index) => {
@@ -617,7 +761,9 @@ export default function Board() {
                         gap: '0.5rem'
                       }}
                     >
-                      <span style={{ fontSize: '1.1rem' }}>{commentErrorStatus === 429 ? '⏳' : commentErrorStatus === 400 ? '🛑' : '⚠️'}</span>
+                      <span style={{ display: 'inline-flex', marginTop: '2px' }}>
+                        {commentErrorStatus === 429 ? <Clock size={16} /> : commentErrorStatus === 400 ? <AlertOctagon size={16} /> : <AlertTriangle size={16} />}
+                      </span>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         {commentErrorStatus === 429 && <strong>Límite horario alcanzado (429)</strong>}
                         {commentErrorStatus === 400 && <strong>Moderación de comentario</strong>}
@@ -635,8 +781,13 @@ export default function Board() {
                       disabled={commentSubmitting}
                       required
                     />
-                    <button type="submit" className="btn btn-primary" disabled={commentSubmitting || !newCommentText.trim()}>
-                      {commentSubmitting ? '...' : 'Enviar 🚀'}
+                    <button type="submit" className="btn btn-primary" disabled={commentSubmitting || !newCommentText.trim()} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {commentSubmitting ? '...' : (
+                        <>
+                          <span>Enviar</span>
+                          <Send size={14} />
+                        </>
+                      )}
                     </button>
                   </form>
                 </div>

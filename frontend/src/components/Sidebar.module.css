@@ -200,11 +200,25 @@
 .logoutBtn {
   background-color: var(--color-danger-bg);
   color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .logoutBtn:hover {
   background-color: var(--color-danger);
   color: white;
+  border-color: var(--color-danger);
+}
+
+:global(:root[data-theme="dark"]) .logoutBtn {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #FCA5A5;
+}
+
+:global(:root[data-theme="dark"]) .logoutBtn:hover {
+  background-color: #DC2626;
+  border-color: #DC2626;
+  color: #FFFFFF !important;
 }
 
 .toggleIcon, .logoutIcon {

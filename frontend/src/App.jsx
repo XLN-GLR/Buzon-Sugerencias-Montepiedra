@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Board from './pages/Board';
 import SuggestionForm from './pages/SuggestionForm';
-import MaintenanceBoard from './pages/MaintenanceBoard';
 import SecretariaPanel from './pages/SecretariaPanel';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -71,7 +70,7 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout />
                 </ProtectedRoute>
-              }
+              } 
             >
               {/* 1. Tablero Público de Sugerencias (Todos los roles) */}
               <Route index element={<Board />} />
@@ -86,17 +85,7 @@ export default function App() {
                 } 
               />
 
-              {/* 3. Tablón de Tareas de Mantenimiento (Mantenimiento y Administrador) */}
-              <Route 
-                path="mantenimiento" 
-                element={
-                  <RoleRoute allowedRoles={['mantenimiento', 'administrador', 'admin']}>
-                    <MaintenanceBoard />
-                  </RoleRoute>
-                } 
-              />
-
-              {/* 4. Panel de Nóminas de Secretaría (Secretaría y Administrador) */}
+              {/* 3. Panel de Nóminas de Secretaría (Secretaría y Administrador) */}
               <Route 
                 path="secretaria" 
                 element={
@@ -106,7 +95,7 @@ export default function App() {
                 } 
               />
               
-              {/* 5. Panel de Moderación y Respuestas Oficiales (Profesor y Administrador) */}
+              {/* 4. Panel de Moderación y Respuestas Oficiales (Profesor y Administrador) */}
               <Route 
                 path="admin" 
                 element={
@@ -116,7 +105,7 @@ export default function App() {
                 } 
               />
 
-              {/* 6. Perfil de Usuario (Todos los roles) */}
+              {/* 5. Perfil de Usuario (Todos los roles) */}
               <Route path="perfil" element={<Profile />} />
             </Route>
 

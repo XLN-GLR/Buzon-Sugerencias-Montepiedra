@@ -34,6 +34,7 @@
 .themeToggle {
   background-color: var(--color-secondary-light);
   border: 1px solid var(--color-border);
+  color: #4B5563;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -47,7 +48,20 @@
 
 .themeToggle:hover {
   background-color: var(--color-border);
+  color: #1F2937;
   transform: scale(1.05);
+}
+
+:global(:root[data-theme="dark"]) .themeToggle {
+  background-color: #27272A;
+  border-color: #3F3F46;
+  color: #FBBF24;
+}
+
+:global(:root[data-theme="dark"]) .themeToggle:hover {
+  background-color: #3F3F46;
+  border-color: #FBBF24;
+  color: #FDE047;
 }
 
 .toggleIcon {

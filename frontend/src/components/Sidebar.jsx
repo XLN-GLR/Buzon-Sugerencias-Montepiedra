@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { 
+  LayoutDashboard, 
+  FileText, 
+  FileSpreadsheet, 
+  ShieldCheck, 
+  User, 
+  LogOut, 
+  Menu, 
+  X 
+} from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import styles from './Sidebar.module.css';
 
@@ -27,7 +37,6 @@ export default function Sidebar() {
   const isAdmin = user.rol === 'administrador' || user.rol === 'admin';
   const isProfesor = user.rol === 'profesor';
   const isAlumno = user.rol === 'alumno';
-  const isMantenimiento = user.rol === 'mantenimiento';
   const isSecretaria = user.rol === 'secretaria';
 
   return (
@@ -43,7 +52,7 @@ export default function Sidebar() {
         </div>
         <div className={styles.mobileActions}>
           <button className={styles.hamburger} onClick={toggleSidebar} aria-label="Menú">
-            {isOpen ? '✕' : '☰'}
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>
@@ -70,7 +79,8 @@ export default function Sidebar() {
                 onClick={closeSidebar}
                 end
               >
-                <span className={styles.linkIcon}>📋</span> Tablero Público
+                <LayoutDashboard size={18} className={styles.linkIcon} />
+                <span>Tablero Público</span>
               </NavLink>
             </li>
 
@@ -82,25 +92,13 @@ export default function Sidebar() {
                   className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
                   onClick={closeSidebar}
                 >
-                  <span className={styles.linkIcon}>✍️</span> Enviar Sugerencia
+                  <FileText size={18} className={styles.linkIcon} />
+                  <span>Enviar Sugerencia</span>
                 </NavLink>
               </li>
             )}
 
-            {/* 3. Tablón de Mantenimiento (Rol Mantenimiento y Administradores) */}
-            {(isMantenimiento || isAdmin) && (
-              <li>
-                <NavLink 
-                  to="/mantenimiento" 
-                  className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
-                  onClick={closeSidebar}
-                >
-                  <span className={styles.linkIcon}>🔨</span> Tareas Mantenimiento
-                </NavLink>
-              </li>
-            )}
-
-            {/* 4. Panel de Nóminas (Rol Secretaría y Administradores) */}
+            {/* 3. Panel de Nóminas (Rol Secretaría y Administradores) */}
             {(isSecretaria || isAdmin) && (
               <li>
                 <NavLink 
@@ -108,12 +106,13 @@ export default function Sidebar() {
                   className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
                   onClick={closeSidebar}
                 >
-                  <span className={styles.linkIcon}>📑</span> Gestión de Nóminas
+                  <FileSpreadsheet size={18} className={styles.linkIcon} />
+                  <span>Gestión de Nóminas</span>
                 </NavLink>
               </li>
             )}
 
-            {/* 5. Panel de Gestión y Moderación (Profesores y Administradores) */}
+            {/* 4. Panel de Gestión y Moderación (Profesores y Administradores) */}
             {(isProfesor || isAdmin) && (
               <li>
                 <NavLink 
@@ -121,19 +120,21 @@ export default function Sidebar() {
                   className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
                   onClick={closeSidebar}
                 >
-                  <span className={styles.linkIcon}>⚙️</span> Panel de Moderación
+                  <ShieldCheck size={18} className={styles.linkIcon} />
+                  <span>Panel de Moderación</span>
                 </NavLink>
               </li>
             )}
 
-            {/* 6. Perfil de Usuario (Para todos los roles) */}
+            {/* 5. Perfil de Usuario (Para todos los roles) */}
             <li>
               <NavLink 
                 to="/perfil" 
                 className={({ isActive }) => isActive ? `${styles.navLink} ${styles.activeLink}` : styles.navLink}
                 onClick={closeSidebar}
               >
-                <span className={styles.linkIcon}>👤</span> Mi Perfil
+                <User size={18} className={styles.linkIcon} />
+                <span>Mi Perfil</span>
               </NavLink>
             </li>
           </ul>
@@ -142,7 +143,8 @@ export default function Sidebar() {
         {/* Sidebar Footer */}
         <div className={styles.footer}>
           <button className={styles.logoutBtn} onClick={handleLogout}>
-            <span className={styles.logoutIcon}>🚪</span> Cerrar Sesión
+            <LogOut size={18} className={styles.logoutIcon} />
+            <span>Cerrar Sesión</span>
           </button>
         </div>
       </aside>

@@ -2,6 +2,18 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { validateEcuadorianCedula, formatRole } from '../utils/api';
+import { 
+  GraduationCap, 
+  ShieldCheck, 
+  BookOpen, 
+  FileSpreadsheet, 
+  CreditCard, 
+  Lock, 
+  AlertTriangle, 
+  AlertCircle, 
+  Sparkles,
+  ArrowRight
+} from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import './Pages.css';
 
@@ -24,11 +36,10 @@ export default function Login() {
 
   // Lista de credenciales de prueba para facilitar evaluación (con Cédulas Módulo 10 Válidas)
   const testAccounts = [
-    { role: 'Alumno', name: 'Daniel Mendoza', cedula: '0950130260', email: 'daniel.mendoza@alumno.montepiedra.edu.ec', icon: '🎓' },
-    { role: 'Administrador', name: 'Ing. Mauricio Ramos', cedula: '0917240327', email: 'admin@montepiedra.edu.ec', icon: '🛡️' },
-    { role: 'Profesor', name: 'Dr. Gabriel Villalba', cedula: '0923456784', email: 'profesor@montepiedra.edu.ec', icon: '👨‍🏫' },
-    { role: 'Mantenimiento', name: 'Sr. Roberto Gómez', cedula: '0930816400', email: 'mantenimiento@montepiedra.edu.ec', icon: '🔨' },
-    { role: 'Secretaría', name: 'Lcda. Elizabeth Ponce', cedula: '0950764043', email: 'secretaria@montepiedra.edu.ec', icon: '📑' }
+    { role: 'Alumno', name: 'Daniel Mendoza', cedula: '0950130260', email: 'daniel.mendoza@alumno.montepiedra.edu.ec', Icon: GraduationCap },
+    { role: 'Administrador', name: 'Ing. Mauricio Ramos', cedula: '0917240327', email: 'admin@montepiedra.edu.ec', Icon: ShieldCheck },
+    { role: 'Profesor', name: 'Dr. Gabriel Villalba', cedula: '0923456784', email: 'profesor@montepiedra.edu.ec', Icon: BookOpen },
+    { role: 'Secretaría', name: 'Lcda. Elizabeth Ponce', cedula: '0950764043', email: 'secretaria@montepiedra.edu.ec', Icon: FileSpreadsheet }
   ];
 
   // Manejador de cambio en input de Cédula
@@ -82,7 +93,6 @@ export default function Login() {
       }
     }, 300);
   };
-
 
   // Paso 2A: Configuración de contraseña (Primer ingreso)
   const handleSetupPasswordSubmit = (e) => {
@@ -149,8 +159,8 @@ export default function Login() {
         </div>
 
         {errorMsg && (
-          <div className="alert-banner alert-error animate-fadeIn">
-            <span>⚠️</span>
+          <div className="alert-banner alert-error animate-fadeIn" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <AlertTriangle size={18} color="#DC2626" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -162,8 +172,10 @@ export default function Login() {
               <label className="form-label" htmlFor="cedula-input">
                 Número de Cédula de Identidad
               </label>
-              <div className="input-icon-wrapper">
-                <span className="input-prefix-icon">🪪</span>
+              <div className="input-icon-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span className="input-prefix-icon" style={{ position: 'absolute', left: '0.75rem', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: 'var(--color-text-muted)' }}>
+                  <CreditCard size={18} />
+                </span>
                 <input
                   id="cedula-input"
                   type="text"
@@ -173,11 +185,14 @@ export default function Login() {
                   maxLength={10}
                   required
                   autoFocus
+                  style={{ paddingLeft: '2.5rem' }}
                   className={`login-input ${cedulaError ? 'input-invalid' : ''}`}
                 />
               </div>
               {cedulaError ? (
-                <p className="input-error-msg">⚠️ {cedulaError}</p>
+                <p className="input-error-msg" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#DC2626', fontSize: '0.8rem', marginTop: '0.35rem' }}>
+                  <AlertCircle size={14} /> {cedulaError}
+                </p>
               ) : (
                 <p className="form-help">
                   Ingresa tu número de cédula ecuatoriana de 10 dígitos (provincia 01-24) registrado en secretaría.
@@ -188,13 +203,14 @@ export default function Login() {
             <button 
               type="submit" 
               className="btn btn-primary login-submit-btn" 
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               disabled={loading || Boolean(cedulaError) || !cedula}
             >
-              {loading ? 'Validando Cédula...' : 'Continuar ➔'}
+              <span>{loading ? 'Validando Cédula...' : 'Continuar'}</span>
+              <ArrowRight size={16} />
             </button>
           </form>
         )}
-
 
         {/* PASO 2A: Configuración de Contraseña (Primer Ingreso) */}
         {step === 'setup_password' && currentUser && (
@@ -210,7 +226,7 @@ export default function Login() {
                 </div>
               </div>
               <p className="setup-instructions">
-                ✨ Este es tu <strong>primer ingreso al sistema</strong>. Elige cómo deseas proteger tu cuenta institucional:
+                Este es tu <strong>primer ingreso al sistema</strong>. Elige cómo deseas proteger tu cuenta institucional:
               </p>
             </div>
 
@@ -303,8 +319,10 @@ export default function Login() {
               <label className="form-label" htmlFor="password-input">
                 Contraseña
               </label>
-              <div className="input-icon-wrapper">
-                <span className="input-prefix-icon">🔒</span>
+              <div className="input-icon-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span className="input-prefix-icon" style={{ position: 'absolute', left: '0.75rem', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: 'var(--color-text-muted)' }}>
+                  <Lock size={18} />
+                </span>
                 <input
                   id="password-input"
                   type="password"
@@ -313,6 +331,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoFocus
+                  style={{ paddingLeft: '2.5rem' }}
                   className="login-input"
                 />
               </div>
@@ -342,25 +361,31 @@ export default function Login() {
 
         {/* Sección de Cédulas de Prueba Rápidas para Testeo */}
         <div className="test-credentials-section">
-          <div className="test-credentials-header">
-            <span>💡 Cédulas de Prueba por Rol Institucional:</span>
+          <div className="test-credentials-header" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Sparkles size={16} color="var(--color-primary)" />
+            <span>Cédulas de Prueba por Rol Institucional:</span>
           </div>
           <div className="test-credentials-grid">
-            {testAccounts.map((acc) => (
-              <button
-                key={acc.cedula}
-                type="button"
-                className={`test-acc-chip ${cedula === acc.cedula ? 'selected' : ''}`}
-                onClick={() => handleSelectTestAccount(acc.cedula)}
-                title={`Usar cédula de ${acc.name} (${acc.role})`}
-              >
-                <span className="chip-icon">{acc.icon}</span>
-                <div className="chip-info">
-                  <span className="chip-role">{acc.role}</span>
-                  <span className="chip-cedula">{acc.cedula}</span>
-                </div>
-              </button>
-            ))}
+            {testAccounts.map((acc) => {
+              const ChipIcon = acc.Icon;
+              return (
+                <button
+                  key={acc.cedula}
+                  type="button"
+                  className={`test-acc-chip ${cedula === acc.cedula ? 'selected' : ''}`}
+                  onClick={() => handleSelectTestAccount(acc.cedula)}
+                  title={`Usar cédula de ${acc.name} (${acc.role})`}
+                >
+                  <span className="chip-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ChipIcon size={16} />
+                  </span>
+                  <div className="chip-info">
+                    <span className="chip-role">{acc.role}</span>
+                    <span className="chip-cedula">{acc.cedula}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

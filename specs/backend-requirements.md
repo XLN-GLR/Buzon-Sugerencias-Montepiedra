@@ -300,3 +300,84 @@ Se actualizó la gestión de errores en `SuggestionForm.jsx` y `Board.jsx` (moda
 
 ### Cambios en Base de Datos sugeridos
 - [ ] Ninguno (la limitación de tasa se gestiona perimetralmente en memoria/middleware con `express-rate-limit`).
+
+
+---
+
+## [2026-11-05] Moderación y Gestión de Comentarios de Debate en Panel de Moderación
+**Estado:** 🟡 Pendiente
+
+### Contexto de UI
+En el Panel de Moderación (`Dashboard.jsx`), se integró un modal interactivo para la moderación y supervisión de los hilos de debate y comentarios por sugerencia. Permite a los profesores y administradores revisar, ocultar (soft-delete / toggle visibility) y eliminar de forma definitiva intervenciones inapropiadas u ofensivas en los comentarios asociados a cada propuesta del alumnado.
+
+### Endpoints solicitados
+- [ ] `DELETE /sugerencias/:id/comentarios/:comentarioId`
+  - **Params / Query:** 
+    - `id`: Path param (UUID o ID de la sugerencia)
+    - `comentarioId`: Path param (UUID o ID del comentario a eliminar)
+  - **Headers:** `x-user-role: profesor` o `x-user-role: administrador`
+  - **Response esperada:**
+    ```json
+    {
+      "message": "Comentario eliminado exitosamente",
+      "comentarioId": "com-789"
+    }
+    ```
+
+- [ ] `PATCH /sugerencias/:id/comentarios/:comentarioId/ocultar`
+  - **Params / Query:**
+    - `id`: Path param (UUID o ID de la sugerencia)
+    - `comentarioId`: Path param (UUID o ID del comentario)
+  - **Headers:** `x-user-role: profesor` o `x-user-role: administrador`
+  - **Request Body:**
+    ```json
+    {
+      "is_hidden": true
+    }
+    ```
+  - **Response esperada:**
+    ```json
+    {
+      "message": "Estado de visualización del comentario actualizado",
+      "comentarioId": "com-789",
+      "is_hidden": true
+    }
+    ```
+
+### Cambios en Base de Datos sugeridos
+- [ ] Agregar columna `is_hidden` (BOOLEAN DEFAULT false) en la tabla `comentarios_sugerencias` para soportar la moderación y ocultamiento temporal sin pérdida del registro original.
+
+
+---
+
+## [2026-11-07] Eliminación Definitiva de Comentarios en Moderación
+**Estado:** 🟡 Pendiente
+
+### Contexto de UI
+En el modal de moderación institucional (`Dashboard.jsx`), se integró el módulo de debate permitiendo a profesores y administradores supervisar las intervenciones y eliminar de forma permanente comentarios que infrinjan las normas institucionales. Se descartó la funcionalidad de ocultar comentarios en favor del borrado directo.
+
+### Endpoints solicitados
+- [ ] `DELETE /sugerencias/:id/comentarios/:comentarioId`
+  - **Params / Query:** 
+    - `id`: Path param (UUID o ID de la propuesta/sugerencia)
+    - `comentarioId`: Path param (UUID o ID del comentario a remover)
+  - **Headers:** 
+    - `x-user-role`: `profesor` o `administrador`
+    - `x-user-id`: UUID del usuario moderador
+  - **Response esperada (Éxito HTTP 200):**
+    ```json
+    {
+      "message": "Comentario eliminado exitosamente",
+      "sugerencia_id": "sug-123",
+      "comentarioId": "com-789"
+    }
+    ```
+  - **Response esperada (Error HTTP 404):**
+    ```json
+    {
+      "error": "El comentario especificado no existe o ya fue eliminado."
+    }
+    ```
+
+### Cambios en Base de Datos sugeridos
+- [ ] Ejecutar `DELETE FROM comentarios_sugerencias WHERE id = $comentarioId AND sugerencia_id = $id` o cascada referencial correspondiente en Supabase/PostgreSQL.

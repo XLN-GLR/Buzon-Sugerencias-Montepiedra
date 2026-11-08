@@ -1,24 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../utils/api';
+import { 
+  User, 
+  Mail, 
+  CreditCard, 
+  GraduationCap, 
+  Key, 
+  Info,
+  ShieldCheck,
+  FileText,
+  ThumbsUp
+} from 'lucide-react';
 import './Pages.css';
 
-const PRESET_AVATARS = [
-  { name: 'Aventurero Carlos', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Carlos' },
-  { name: 'Divertido Juan', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Juan' },
-  { name: 'Estudiante Pedro', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Pedro' },
-  { name: 'Creativa María', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Maria' },
-  { name: 'Sonriente Sofía', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Sofia' },
-  { name: 'Deportista Luis', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Luis' }
-];
-
 export default function Profile() {
-  const { user, profiles, updateStudentAvatar } = useAuth();
-  const [selectedStudentEmail, setSelectedStudentEmail] = useState('');
-  const [newAvatarUrl, setNewAvatarUrl] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
-  // Get only student profiles for the dropdown list
-  const students = profiles.filter(p => p.rol === 'alumno');
+  const { user } = useAuth();
+  const [suggestionsCount, setSuggestionsCount] = useState(0);
 
   // Map roles to Spanish friendly tags
   const getRoleLabel = (rol) => {
@@ -27,97 +25,156 @@ export default function Profile() {
       case 'profesor': return 'Profesor';
       case 'administrador':
       case 'admin': return 'Administrador';
-      case 'mantenimiento': return 'Mantenimiento';
       case 'secretaria': return 'Secretaría';
       default: return rol;
     }
   };
 
-  const handleStudentSelect = (e) => {
-    const email = e.target.value;
-    setSelectedStudentEmail(email);
-    const student = students.find(s => s.correo === email);
-    setNewAvatarUrl(student ? student.avatar : '');
-  };
+  // Cálculo dinámico de datos históricos del usuario activo desde el backend
+  useEffect(() => {
+    if (!user) return;
+    const fetchUserStats = async () => {
+      try {
+        const userId = user.usuario_id || user.cedula;
+        const res = await api.getSuggestions(user.rol, userId);
+        const list = res.data || [];
+        const count = list.filter(s => 
+          String(s.usuario_id) === String(user.usuario_id) || 
+          String(s.usuario_id) === String(user.cedula)
+        ).length;
+        setSuggestionsCount(count);
+      } catch {
+        setSuggestionsCount(0);
+      }
+    };
+    fetchUserStats();
+  }, [user]);
 
-  const handleSaveAvatar = (e) => {
-    e.preventDefault();
-    if (!selectedStudentEmail || !newAvatarUrl) return;
-
-    const student = students.find(s => s.correo === selectedStudentEmail);
-    if (student) {
-      updateStudentAvatar(selectedStudentEmail, newAvatarUrl);
-      setSuccessMsg(`La foto de perfil de ${student.nombre} se ha actualizado correctamente.`);
-      
-      // Auto-hide alert
-      setTimeout(() => {
-        setSuccessMsg('');
-      }, 5000);
+  const votesCount = useMemo(() => {
+    if (!user) return 0;
+    try {
+      const votesMap = JSON.parse(localStorage.getItem('montepiedra_user_votes') || '{}');
+      const userVotes = votesMap[user.usuario_id || user.cedula] || {};
+      return Object.keys(userVotes).length;
+    } catch {
+      return 0;
     }
-  };
+  }, [user]);
 
-  const applyPreset = (url) => {
-    setNewAvatarUrl(url);
-  };
+  const userStats = { suggestionsCount, votesCount };
+
+  if (!user) return null;
 
   return (
-    <div className="container profile-page-container">
-      <div className="page-header" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-        <h1 className="page-title">👤 Perfil de Usuario</h1>
-        <p className="page-subtitle">
-          Consulta los datos de tu cuenta institucional y gestiona la información de la comunidad.
+    <div className="profile-page-container">
+      <div className="page-header profile-compact-header">
+        <h1 className="page-title profile-compact-title">
+          <User size={24} className="profile-title-icon" />
+          Perfil de Usuario
+        </h1>
+        <p className="page-subtitle profile-compact-subtitle">
+          Consulta los datos de tu cuenta institucional activa en Montepiedra.
         </p>
       </div>
 
-      {successMsg && (
-        <div className="alert-banner alert-success" style={{ maxWidth: '550px', margin: '0 auto 1.5rem auto' }}>
-          <span>✅</span>
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      <div className="profile-layout-centered">
-        {/* User Profile Card (Visible to all) */}
-        <div className="profile-card">
-          <div className="profile-card-header">
-            <img 
-              src={user.avatar || 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=avatar'} 
-              alt={`Avatar de ${user.nombre}`} 
-              className="profile-big-avatar" 
-            />
-            <h2 className="profile-name">{user.nombre}</h2>
+      <div className="profile-card-compact">
+        {/* Main layout: Hero (avatar + name) and Info Grid */}
+        <div className="profile-body-row">
+          {/* Hero Column */}
+          <div className="profile-hero-col">
+            <div className="profile-avatar-wrapper">
+              <img 
+                src={user.avatar || 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=avatar'} 
+                alt={`Avatar de ${user.nombre}`} 
+                className="profile-avatar-compact" 
+              />
+              <span className="profile-status-indicator" title="Sesión activa"></span>
+            </div>
+            <h2 className="profile-hero-name" title={user.nombre}>{user.nombre}</h2>
             <span className={`profile-badge role-${user.rol}`}>
               {getRoleLabel(user.rol)}
             </span>
           </div>
 
-          <div className="profile-details-list">
-            <div className="profile-detail-item">
-              <span className="detail-label">Cédula de Identidad</span>
-              <span className="detail-val"><strong>{user.cedula || 'N/A'}</strong></span>
-            </div>
-            <div className="profile-detail-item">
-              <span className="detail-label">Correo Institucional</span>
-              <span className="detail-val">{user.correo}</span>
-            </div>
-            {user.rol === 'alumno' && (
-              <div className="profile-detail-item">
-                <span className="detail-label">Curso / Grado</span>
-                <span className="detail-val">{user.curso || '2do de Bachillerato'}</span>
+          {/* Details Column / Grid */}
+          <div className="profile-grid-col">
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                <CreditCard size={15} className="profile-meta-icon" />
+                <span className="profile-meta-label">Cédula de Identidad</span>
               </div>
-            )}
-            <div className="profile-detail-item">
-              <span className="detail-label">ID de Sesión (UUID)</span>
-              <code className="detail-uuid">{user.usuario_id}</code>
+              <span className="profile-meta-val" title={user.cedula || 'N/A'}>
+                {user.cedula || 'N/A'}
+              </span>
+            </div>
+
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                <Mail size={15} className="profile-meta-icon" />
+                <span className="profile-meta-label">Correo Institucional</span>
+              </div>
+              <span className="profile-meta-val" title={user.correo}>
+                {user.correo}
+              </span>
+            </div>
+
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                {user.rol === 'alumno' ? (
+                  <GraduationCap size={15} className="profile-meta-icon" />
+                ) : (
+                  <ShieldCheck size={15} className="profile-meta-icon" />
+                )}
+                <span className="profile-meta-label">
+                  {user.rol === 'alumno' ? 'Curso / Grado' : 'Departamento'}
+                </span>
+              </div>
+              <span className="profile-meta-val" title={user.rol === 'alumno' ? (user.curso || '2do de Bachillerato') : 'Personal Institucional'}>
+                {user.rol === 'alumno' ? (user.curso || '2do de Bachillerato') : 'Personal Institucional'}
+              </span>
+            </div>
+
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                <Key size={15} className="profile-meta-icon" />
+                <span className="profile-meta-label">ID de Sesión (UUID)</span>
+              </div>
+              <code className="profile-meta-uuid" title={user.usuario_id}>
+                {user.usuario_id || 'ID Activo'}
+              </code>
+            </div>
+
+            {/* Métricas y Datos Históricos del Usuario */}
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                <FileText size={15} className="profile-meta-icon" />
+                <span className="profile-meta-label">Propuestas Presentadas</span>
+              </div>
+              <span className="profile-meta-val" title={`${userStats.suggestionsCount} sugerencias enviadas`}>
+                {userStats.suggestionsCount} registradas
+              </span>
+            </div>
+
+            <div className="profile-meta-card">
+              <div className="profile-meta-header">
+                <ThumbsUp size={15} className="profile-meta-icon" />
+                <span className="profile-meta-label">Votos Emitidos</span>
+              </div>
+              <span className="profile-meta-val" title={`${userStats.votesCount} votos registrados`}>
+                {userStats.votesCount} aportes
+              </span>
             </div>
           </div>
+        </div>
 
-          <div className="profile-card-footer-info">
-            <span>ℹ️ Los datos institucionales de esta cuenta son administrados por el departamento de Secretaría y Administración de Montepiedra.</span>
-          </div>
+        {/* Footer Note */}
+        <div className="profile-compact-footer">
+          <Info size={16} className="profile-footer-icon" />
+          <span>
+            Los datos institucionales de esta cuenta son administrados por el departamento de Secretaría y Administración de Montepiedra.
+          </span>
         </div>
       </div>
     </div>
   );
 }
-
